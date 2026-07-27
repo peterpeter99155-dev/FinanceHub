@@ -26,6 +26,7 @@ FinanceHub 是一套以淨資產為核心、單一使用者、本機優先的個
 - [功能需求](docs/02_Requirements.md)
 - [商業規則](docs/03_Business_Rules.md)
 - [決策紀錄](docs/04_Decision_Log.md)
+- [Sprint 01 規劃草案](docs/05_Sprint_01_Plan.md)
 
 ## 預定技術方向
 
