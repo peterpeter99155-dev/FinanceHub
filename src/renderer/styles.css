@@ -270,6 +270,37 @@ select:focus {
   box-shadow: 0 0 0 3px rgb(84 131 104 / 13%);
 }
 
+input:focus::placeholder {
+  color: transparent;
+}
+
+.advanced-settings {
+  border: 1px solid #dce2dd;
+  border-radius: 10px;
+  background: #f8faf8;
+}
+
+.advanced-settings summary {
+  padding: 11px 12px;
+  color: #476052;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.advanced-content {
+  display: grid;
+  gap: 16px;
+  padding: 4px 12px 14px;
+}
+
+.advanced-content small {
+  color: #78857d;
+  font-size: 0.75rem;
+  font-weight: 450;
+  line-height: 1.5;
+}
+
 .segmented-control {
   display: grid;
   grid-template-columns: 1fr 1fr;

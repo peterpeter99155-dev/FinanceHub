@@ -43,18 +43,22 @@ const TYPE_LABELS = Object.fromEntries(
 ) as Record<FinancialItemType, string>;
 
 const STATUS_LABELS: Record<DataStatus, string> = {
-  confirmed: '已確認',
-  automatic: '自動更新',
-  estimated: '推算',
-  stale: '已過期',
-  pending_confirmation: '待確認',
+  confirmed: '我已確認金額正確',
+  automatic: '由系統自動更新',
+  estimated: '這是推算金額',
+  stale: '資料可能已過期',
+  pending_confirmation: '我之後再確認',
 };
 
-const EMPTY_DRAFT: FinancialItemDraft = {
+type FinancialItemFormDraft = Omit<FinancialItemDraft, 'amount'> & {
+  amount: string;
+};
+
+const EMPTY_DRAFT: FinancialItemFormDraft = {
   name: '',
   direction: 'asset',
   type: 'bank_deposit',
-  amount: 0,
+  amount: '',
   status: 'confirmed',
   includeInNetWorth: true,
 };
@@ -68,7 +72,8 @@ export function App() {
   const [viewState, setViewState] = useState<ViewState>({
     status: 'loading',
   });
-  const [draft, setDraft] = useState<FinancialItemDraft>(EMPTY_DRAFT);
+  const [draft, setDraft] =
+    useState<FinancialItemFormDraft>(EMPTY_DRAFT);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -103,9 +108,16 @@ export function App() {
     setActionError(null);
 
     try {
+      const itemDraft: FinancialItemDraft = {
+        ...draft,
+        amount: Number(draft.amount),
+      };
       const snapshot = editingId
-        ? await window.financeHub.financialItems.update(editingId, draft)
-        : await window.financeHub.financialItems.create(draft);
+        ? await window.financeHub.financialItems.update(
+            editingId,
+            itemDraft,
+          )
+        : await window.financeHub.financialItems.create(itemDraft);
 
       setViewState({ status: 'ready', snapshot });
       resetForm();
@@ -122,7 +134,7 @@ export function App() {
       name: item.name,
       direction: item.direction,
       type: item.type,
-      amount: item.amount,
+      amount: String(item.amount),
       status: item.status,
       includeInNetWorth: item.includeInNetWorth,
     });
@@ -352,57 +364,69 @@ export function App() {
                   <input
                     data-testid="item-amount"
                     required
-                    min="0"
-                    step="1"
-                    type="number"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="0"
+                    type="text"
                     value={draft.amount}
                     onChange={(event) =>
                       setDraft((current) => ({
                         ...current,
-                        amount: Number(event.target.value),
+                        amount: event.target.value.replace(/\D/g, ''),
                       }))
                     }
                   />
                 </label>
 
-                <label>
-                  資料狀態
-                  <select
-                    value={draft.status}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        status: event.target.value as DataStatus,
-                      }))
-                    }
-                  >
-                    {DATA_STATUSES.map((status) => (
-                      <option key={status} value={status}>
-                        {STATUS_LABELS[status]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <details
+                  className="advanced-settings"
+                  data-testid="advanced-settings"
+                >
+                  <summary>更多設定</summary>
+                  <div className="advanced-content">
+                    <label>
+                      這筆金額的可信程度
+                      <select
+                        value={draft.status}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            status: event.target.value as DataStatus,
+                          }))
+                        }
+                      >
+                        {DATA_STATUSES.map((status) => (
+                          <option key={status} value={status}>
+                            {STATUS_LABELS[status]}
+                          </option>
+                        ))}
+                      </select>
+                      <small>
+                        一般手動輸入維持「我已確認金額正確」即可。
+                      </small>
+                    </label>
 
-                <label className="checkbox-label">
-                  <input
-                    checked={draft.includeInNetWorth}
-                    type="checkbox"
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        includeInNetWorth: event.target.checked,
-                      }))
-                    }
-                  />
-                  計入淨資產
-                </label>
+                    <label className="checkbox-label">
+                      <input
+                        checked={draft.includeInNetWorth}
+                        type="checkbox"
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            includeInNetWorth: event.target.checked,
+                          }))
+                        }
+                      />
+                      計入淨資產
+                    </label>
 
-                {draft.status === 'pending_confirmation' && (
-                  <p className="form-notice">
-                    待確認項目不會影響正式淨資產合計。
-                  </p>
-                )}
+                    {draft.status === 'pending_confirmation' && (
+                      <p className="form-notice">
+                        尚未確認的項目會保留，但不影響正式淨資產。
+                      </p>
+                    )}
+                  </div>
+                </details>
                 {actionError && (
                   <p className="form-error" role="alert">
                     {actionError}

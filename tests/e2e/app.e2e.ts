@@ -28,6 +28,15 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     let page = await application.firstWindow();
 
     await expect(page.getByTestId('net-worth')).toContainText('$0');
+    await expect(page.getByTestId('item-amount')).toHaveAttribute(
+      'type',
+      'text',
+    );
+    await expect(page.getByTestId('item-amount')).toHaveValue('');
+    await expect(page.getByTestId('advanced-settings')).not.toHaveAttribute(
+      'open',
+      '',
+    );
 
     await createItem(page, {
       name: '示範銀行存款',
