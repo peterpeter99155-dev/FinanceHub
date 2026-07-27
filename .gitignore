@@ -1,0 +1,68 @@
+# Dependencies and build output
+node_modules/
+out/
+dist/
+build/
+.vite/
+.webpack/
+coverage/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.pfx
+*.p12
+secrets/
+credentials/
+tokens/
+
+# FinanceHub private data
+data/
+private/
+backups/
+exports/
+imports/
+samples/private/
+samples/raw/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlcipher
+*.backup
+
+# Financial source documents
+*.pdf
+*.ofx
+*.qfx
+*.qif
+
+# Email source files
+*.eml
+*.msg
+*.mbox
+
+# Logs and temporary files
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+
+# Electron packaging
+release/
+makers/
+
+# Test artifacts that may contain local paths or data
+test-results/
+playwright-report/
