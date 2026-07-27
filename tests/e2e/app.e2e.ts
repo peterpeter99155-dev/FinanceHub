@@ -33,6 +33,14 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
       'text',
     );
     await expect(page.getByTestId('item-amount')).toHaveValue('');
+    await expect(
+      page.getByTestId('asset-group').getByText('尚未建立資產'),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByTestId('liability-group')
+        .getByText('尚未建立負債'),
+    ).toBeVisible();
     await expect(page.getByTestId('advanced-settings')).not.toHaveAttribute(
       'open',
       '',
@@ -74,6 +82,18 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     );
     await expect(page.getByTestId('net-worth')).toContainText(
       'NT$ 4,000,000',
+    );
+    await expect(page.getByTestId('asset-group')).toContainText(
+      '示範銀行存款',
+    );
+    await expect(page.getByTestId('asset-group')).toContainText(
+      '示範房產',
+    );
+    await expect(page.getByTestId('asset-group')).not.toContainText(
+      '示範房貸',
+    );
+    await expect(page.getByTestId('liability-group')).toContainText(
+      '示範房貸',
     );
 
     const mortgageRow = page

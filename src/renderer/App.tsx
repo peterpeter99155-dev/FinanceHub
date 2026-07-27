@@ -106,6 +106,15 @@ export function App() {
 
     return viewState.snapshot.items.filter((item) => item.isActive);
   }, [viewState]);
+  const assetItems = useMemo(
+    () => activeItems.filter((item) => item.direction === 'asset'),
+    [activeItems],
+  );
+  const liabilityItems = useMemo(
+    () =>
+      activeItems.filter((item) => item.direction === 'liability'),
+    [activeItems],
+  );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -248,54 +257,26 @@ export function App() {
                 </div>
               </div>
 
-              {activeItems.length === 0 ? (
-                <div className="empty-state">
-                  <strong>尚未建立財務項目</strong>
-                  <p>從右側表單加入第一筆假資料，首頁會立即計算。</p>
-                </div>
-              ) : (
-                <div className="item-list">
-                  {activeItems.map((item) => (
-                    <article
-                      className="item-row"
-                      data-testid={`financial-item-${item.id}`}
-                      key={item.id}
-                    >
-                      <div className={`direction-dot ${item.direction}`} />
-                      <div className="item-main">
-                        <strong>{item.name}</strong>
-                        <span>
-                          {TYPE_LABELS[item.type]} ·{' '}
-                          {STATUS_LABELS[item.status]}
-                          {!item.includeInNetWorth && ' · 不計入'}
-                        </span>
-                      </div>
-                      <div className="item-value">
-                        <strong>{formatTwd(item.amount)}</strong>
-                        <time dateTime={item.updatedAt}>
-                          {formatUpdatedAt(item.updatedAt)}
-                        </time>
-                      </div>
-                      <div className="row-actions">
-                        <button
-                          className="text-button"
-                          type="button"
-                          onClick={() => startEditing(item)}
-                        >
-                          編輯
-                        </button>
-                        <button
-                          className="text-button danger"
-                          type="button"
-                          onClick={() => setPendingDeleteItem(item)}
-                        >
-                          刪除
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
+              <div className="financial-groups">
+                <FinancialItemGroup
+                  direction="asset"
+                  emptyMessage="尚未建立資產"
+                  items={assetItems}
+                  onDelete={setPendingDeleteItem}
+                  onEdit={startEditing}
+                  title="資產"
+                  total={viewState.snapshot.summary.totalAssets}
+                />
+                <FinancialItemGroup
+                  direction="liability"
+                  emptyMessage="尚未建立負債"
+                  items={liabilityItems}
+                  onDelete={setPendingDeleteItem}
+                  onEdit={startEditing}
+                  title="負債"
+                  total={viewState.snapshot.summary.totalLiabilities}
+                />
+              </div>
             </section>
 
             <section className="panel form-panel">
@@ -554,6 +535,90 @@ function SummaryCard({
       <span>{label}</span>
       <strong>{formatTwd(value)}</strong>
     </article>
+  );
+}
+
+function FinancialItemGroup({
+  direction,
+  emptyMessage,
+  items,
+  onDelete,
+  onEdit,
+  title,
+  total,
+}: {
+  direction: FinancialItemDirection;
+  emptyMessage: string;
+  items: readonly FinancialItem[];
+  onDelete: (item: FinancialItem) => void;
+  onEdit: (item: FinancialItem) => void;
+  title: string;
+  total: number;
+}) {
+  return (
+    <section
+      aria-labelledby={`${direction}-group-title`}
+      className={`financial-group ${direction}`}
+      data-testid={`${direction}-group`}
+    >
+      <header className="group-heading">
+        <div>
+          <span className={`group-marker ${direction}`} />
+          <h3 id={`${direction}-group-title`}>{title}</h3>
+        </div>
+        <p>
+          列入首頁 <strong>{formatTwd(total)}</strong>
+        </p>
+      </header>
+
+      {items.length === 0 ? (
+        <div className="group-empty">
+          <strong>{emptyMessage}</strong>
+          <span>可從右側表單新增。</span>
+        </div>
+      ) : (
+        <div className="item-list">
+          {items.map((item) => (
+            <article
+              className="item-row"
+              data-testid={`financial-item-${item.id}`}
+              key={item.id}
+            >
+              <div className={`direction-dot ${item.direction}`} />
+              <div className="item-main">
+                <strong>{item.name}</strong>
+                <span>
+                  {TYPE_LABELS[item.type]} · {STATUS_LABELS[item.status]}
+                  {!item.includeInNetWorth && ' · 不列入首頁'}
+                </span>
+              </div>
+              <div className="item-value">
+                <strong>{formatTwd(item.amount)}</strong>
+                <time dateTime={item.updatedAt}>
+                  {formatUpdatedAt(item.updatedAt)}
+                </time>
+              </div>
+              <div className="row-actions">
+                <button
+                  className="text-button"
+                  type="button"
+                  onClick={() => onEdit(item)}
+                >
+                  編輯
+                </button>
+                <button
+                  className="text-button danger"
+                  type="button"
+                  onClick={() => onDelete(item)}
+                >
+                  刪除
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

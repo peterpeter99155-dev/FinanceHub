@@ -170,6 +170,86 @@ h2 {
   color: #26372e;
 }
 
+.financial-groups {
+  display: grid;
+  gap: 22px;
+}
+
+.financial-group {
+  overflow: hidden;
+  border: 1px solid #e0e6e2;
+  border-radius: 15px;
+}
+
+.financial-group.asset {
+  background: linear-gradient(135deg, #fbfdfb, #f4faf6);
+}
+
+.financial-group.liability {
+  background: linear-gradient(135deg, #fdfcfb, #fbf6f4);
+}
+
+.group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 15px 18px;
+  border-bottom: 1px solid #e3e8e5;
+}
+
+.group-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.group-heading h3,
+.group-heading p {
+  margin: 0;
+}
+
+.group-heading h3 {
+  font-size: 1rem;
+}
+
+.group-heading p {
+  color: #728078;
+  font-size: 0.78rem;
+}
+
+.group-heading p strong {
+  color: #34483d;
+  font-size: 0.88rem;
+}
+
+.group-marker {
+  width: 4px;
+  height: 18px;
+  border-radius: 999px;
+}
+
+.group-marker.asset {
+  background: #3c9164;
+}
+
+.group-marker.liability {
+  background: #c76c5c;
+}
+
+.group-empty {
+  display: flex;
+  padding: 22px 18px;
+  color: #758179;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.8rem;
+}
+
+.group-empty strong {
+  color: #4f5f56;
+}
+
 .item-list {
   display: grid;
 }
@@ -179,7 +259,7 @@ h2 {
   grid-template-columns: 10px minmax(150px, 1fr) auto auto;
   gap: 14px;
   align-items: center;
-  padding: 18px 4px;
+  padding: 17px 18px;
   border-top: 1px solid #e5e9e6;
 }
 
