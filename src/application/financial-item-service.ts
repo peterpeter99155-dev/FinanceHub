@@ -16,6 +16,7 @@ import type {
   FinancialItemDraft,
   FinancialItemSnapshot,
 } from '../shared/financial-items';
+import { FINANCIAL_ITEM_TYPE_LABELS } from '../shared/financial-item-labels';
 import type { FinancialItemRepository } from './ports/financial-item-repository';
 
 export class FinancialItemService {
@@ -84,13 +85,6 @@ function parseDraft(input: unknown): FinancialItemDraft {
     throw new Error('Financial item input is invalid.');
   }
 
-  const name =
-    typeof input.name === 'string' ? input.name.trim() : '';
-
-  if (name.length === 0 || name.length > 100) {
-    throw new Error('Name must contain between 1 and 100 characters.');
-  }
-
   const direction = assertAllowed(
     input.direction,
     FINANCIAL_ITEM_DIRECTIONS,
@@ -98,6 +92,16 @@ function parseDraft(input: unknown): FinancialItemDraft {
   );
   const type = assertAllowed(input.type, FINANCIAL_ITEM_TYPES, 'type');
   const status = assertAllowed(input.status, DATA_STATUSES, 'status');
+  const requestedName =
+    typeof input.name === 'string' ? input.name.trim() : '';
+  const name =
+    requestedName.length > 0
+      ? requestedName
+      : FINANCIAL_ITEM_TYPE_LABELS[type];
+
+  if (name.length > 100) {
+    throw new Error('Name cannot exceed 100 characters.');
+  }
 
   if (typeof input.amount !== 'number') {
     throw new Error('Amount must be a number.');

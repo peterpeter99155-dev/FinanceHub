@@ -19,6 +19,7 @@ import type {
   FinancialItemDraft,
   FinancialItemSnapshot,
 } from '../shared/financial-items';
+import { FINANCIAL_ITEM_TYPE_LABELS } from '../shared/financial-item-labels';
 
 const TYPE_OPTIONS: Record<
   FinancialItemDirection,
@@ -37,12 +38,6 @@ const TYPE_OPTIONS: Record<
     { value: 'custom_liability', label: '自訂負債' },
   ],
 };
-
-const TYPE_LABELS = Object.fromEntries(
-  Object.values(TYPE_OPTIONS)
-    .flat()
-    .map(({ value, label }) => [value, label]),
-) as Record<FinancialItemType, string>;
 
 const STATUS_LABELS: Record<DataStatus, string> = {
   confirmed: '我已確認金額正確',
@@ -376,11 +371,10 @@ export function App() {
                 </fieldset>
 
                 <label>
-                  名稱
+                  名稱（選填）
                   <input
                     data-testid="item-name"
                     ref={nameInputRef}
-                    required
                     maxLength={100}
                     value={draft.name}
                     placeholder="例如：示範銀行存款"
@@ -391,6 +385,9 @@ export function App() {
                       }))
                     }
                   />
+                  <small>
+                    留空時會使用類型名稱，名稱可以重複。
+                  </small>
                 </label>
 
                 <label>
@@ -648,7 +645,8 @@ function FinancialItemGroup({
               <div className="item-main">
                 <strong>{item.name}</strong>
                 <span>
-                  {TYPE_LABELS[item.type]} · {STATUS_LABELS[item.status]}
+                  {FINANCIAL_ITEM_TYPE_LABELS[item.type]} ·{' '}
+                  {STATUS_LABELS[item.status]}
                   {!item.includeInNetWorth && ' · 不列入首頁'}
                 </span>
               </div>

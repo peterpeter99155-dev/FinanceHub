@@ -54,6 +54,33 @@ describe('FinancialItemService', () => {
     });
   });
 
+  it('uses the type label when the optional name is blank', () => {
+    const snapshot = service.create({
+      ...ASSET_DRAFT,
+      name: '   ',
+      type: 'cash',
+    });
+
+    expect(snapshot.items[0].name).toBe('現金');
+  });
+
+  it('allows duplicate names because ids remain unique', () => {
+    let idSequence = 0;
+    service = new FinancialItemService(
+      new SqliteFinancialItemRepository(connection.database),
+      () => `asset-${++idSequence}`,
+      () => currentTime,
+    );
+
+    service.create(ASSET_DRAFT);
+    const snapshot = service.create(ASSET_DRAFT);
+
+    expect(snapshot.items.map(({ name }) => name)).toEqual([
+      '示範銀行存款',
+      '示範銀行存款',
+    ]);
+  });
+
   it('updates an item and recalculates the snapshot', () => {
     service.create(ASSET_DRAFT);
     currentTime = '2026-07-27T09:00:00.000Z';
@@ -90,7 +117,7 @@ describe('FinancialItemService', () => {
   });
 
   it.each([
-    [{ ...ASSET_DRAFT, name: '' }, 'Name'],
+    [{ ...ASSET_DRAFT, name: 'x'.repeat(101) }, '100 characters'],
     [{ ...ASSET_DRAFT, amount: 0 }, 'greater than zero'],
     [{ ...ASSET_DRAFT, amount: -1 }, 'cannot be negative'],
     [{ ...ASSET_DRAFT, amount: 1_000_000_000_000 }, 'allowed maximum'],

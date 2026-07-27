@@ -158,6 +158,15 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     await expect(page.getByTestId('item-name')).toHaveValue(
       '刪除後可以立即輸入',
     );
+    await page.getByTestId('item-name').fill('');
+    await page.getByTestId('item-type').selectOption('cash');
+    await page.getByTestId('item-amount').fill('500');
+    await page.getByTestId('save-item').click();
+    await expect(
+      page.getByTestId('asset-group').getByText('現金', {
+        exact: true,
+      }),
+    ).toBeVisible();
   } finally {
     await application?.close();
     rmSync(userDataDirectory, { recursive: true, force: true });
