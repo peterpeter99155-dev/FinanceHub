@@ -685,7 +685,7 @@ function formatTwd(value: number): string {
     maximumFractionDigits: 0,
   }).format(value);
 
-  return `NT$ ${formattedAmount}`;
+  return `TWD ${formattedAmount}`;
 }
 
 function formatUpdatedAt(value: string): string {

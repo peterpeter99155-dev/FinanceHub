@@ -27,7 +27,7 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     application = await launchApplication(userDataDirectory);
     let page = await application.firstWindow();
 
-    await expect(page.getByTestId('net-worth')).toContainText('NT$ 0');
+    await expect(page.getByTestId('net-worth')).toContainText('TWD 0');
     await expect(page.getByTestId('summary-equation')).toContainText(
       '淨資產',
     );
@@ -62,7 +62,7 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     await page.getByTestId('item-amount').fill('');
     await page.getByTestId('item-amount').fill('1000000000000');
     await expect(page.getByRole('status')).toContainText(
-      '單筆金額上限為 NT$ 999,999,999,999',
+      '單筆金額上限為 TWD 999,999,999,999',
     );
     await expect(page.getByTestId('item-amount')).toHaveValue('');
 
@@ -85,13 +85,13 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     });
 
     await expect(page.getByTestId('total-assets')).toContainText(
-      'NT$ 9,000,000',
+      'TWD 9,000,000',
     );
     await expect(page.getByTestId('total-liabilities')).toContainText(
-      'NT$ 5,000,000',
+      'TWD 5,000,000',
     );
     await expect(page.getByTestId('net-worth')).toContainText(
-      'NT$ 4,000,000',
+      'TWD 4,000,000',
     );
     await expect(page.getByTestId('asset-group')).toContainText(
       '示範銀行存款',
@@ -115,7 +115,7 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     await page.getByTestId('save-item').click();
 
     await expect(page.getByTestId('net-worth')).toContainText(
-      'NT$ 4,100,000',
+      'TWD 4,100,000',
     );
 
     await application.close();
@@ -123,7 +123,7 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     page = await application.firstWindow();
 
     await expect(page.getByTestId('net-worth')).toContainText(
-      'NT$ 4,100,000',
+      'TWD 4,100,000',
     );
     await expect(
       page.getByText('示範銀行存款', { exact: true }),
@@ -146,10 +146,10 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
       page.getByText('示範房產', { exact: true }),
     ).toHaveCount(0);
     await expect(page.getByTestId('total-assets')).toContainText(
-      'NT$ 1,000,000',
+      'TWD 1,000,000',
     );
     await expect(page.getByTestId('total-liabilities')).toContainText(
-      'NT$ 4,900,000',
+      'TWD 4,900,000',
     );
     await expect(page.getByTestId('item-name')).toBeFocused();
     await page
