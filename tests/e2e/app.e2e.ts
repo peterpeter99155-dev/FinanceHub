@@ -105,8 +105,12 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
       .getByText('示範房產', { exact: true })
       .locator('..')
       .locator('..');
-    page.once('dialog', (dialog) => dialog.accept());
     await propertyRow.getByRole('button', { name: '刪除' }).click();
+    const deleteDialog = page.getByRole('alertdialog');
+    await expect(deleteDialog).toBeVisible();
+    await deleteDialog
+      .getByRole('button', { name: '永久刪除' })
+      .click();
 
     await expect(
       page.getByText('示範房產', { exact: true }),
@@ -116,6 +120,13 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     );
     await expect(page.getByTestId('total-liabilities')).toContainText(
       'NT$ 4,900,000',
+    );
+    await expect(page.getByTestId('item-name')).toBeFocused();
+    await page
+      .getByTestId('item-name')
+      .fill('刪除後可以立即輸入');
+    await expect(page.getByTestId('item-name')).toHaveValue(
+      '刪除後可以立即輸入',
     );
   } finally {
     await application?.close();

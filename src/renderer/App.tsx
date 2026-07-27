@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -76,7 +77,11 @@ export function App() {
     useState<FinancialItemFormDraft>(EMPTY_DRAFT);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [pendingDeleteItem, setPendingDeleteItem] =
+    useState<FinancialItem | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   const loadItems = useCallback(async () => {
     try {
@@ -141,25 +146,30 @@ export function App() {
     setActionError(null);
   }
 
-  async function deleteItem(item: FinancialItem) {
-    const accepted = window.confirm(
-      `永久刪除「${item.name}」？此操作無法復原。`,
-    );
-
-    if (!accepted) {
+  async function confirmDeleteItem() {
+    if (!pendingDeleteItem) {
       return;
     }
 
+    setIsDeleting(true);
     setActionError(null);
     try {
       const snapshot =
-        await window.financeHub.financialItems.delete(item.id);
+        await window.financeHub.financialItems.delete(
+          pendingDeleteItem.id,
+        );
       setViewState({ status: 'ready', snapshot });
-      if (editingId === item.id) {
+      if (editingId === pendingDeleteItem.id) {
         resetForm();
       }
+      setPendingDeleteItem(null);
+      focusNameInput();
     } catch (error) {
       setActionError(getErrorMessage(error));
+      setPendingDeleteItem(null);
+      focusNameInput();
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -175,6 +185,13 @@ export function App() {
     setEditingId(null);
     setDraft(EMPTY_DRAFT);
     setActionError(null);
+  }
+
+  function focusNameInput() {
+    window.setTimeout(() => {
+      window.focus();
+      nameInputRef.current?.focus();
+    }, 0);
   }
 
   return (
@@ -270,7 +287,7 @@ export function App() {
                         <button
                           className="text-button danger"
                           type="button"
-                          onClick={() => void deleteItem(item)}
+                          onClick={() => setPendingDeleteItem(item)}
                         >
                           刪除
                         </button>
@@ -325,6 +342,7 @@ export function App() {
                   名稱
                   <input
                     data-testid="item-name"
+                    ref={nameInputRef}
                     required
                     maxLength={100}
                     value={draft.name}
@@ -458,6 +476,60 @@ export function App() {
             </section>
           </div>
         </>
+      )}
+
+      {pendingDeleteItem && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              !isDeleting
+            ) {
+              setPendingDeleteItem(null);
+              focusNameInput();
+            }
+          }}
+          role="presentation"
+        >
+          <section
+            aria-describedby="delete-dialog-description"
+            aria-labelledby="delete-dialog-title"
+            aria-modal="true"
+            className="confirm-dialog"
+            role="alertdialog"
+          >
+            <p className="label">確認刪除</p>
+            <h2 id="delete-dialog-title">
+              永久刪除「{pendingDeleteItem.name}」？
+            </h2>
+            <p id="delete-dialog-description">
+              刪除後無法復原，這筆資料也不會再列入首頁總額。
+            </p>
+            <div className="dialog-actions">
+              <button
+                autoFocus
+                className="secondary-button"
+                disabled={isDeleting}
+                type="button"
+                onClick={() => {
+                  setPendingDeleteItem(null);
+                  focusNameInput();
+                }}
+              >
+                取消
+              </button>
+              <button
+                className="delete-button"
+                disabled={isDeleting}
+                type="button"
+                onClick={() => void confirmDeleteItem()}
+              >
+                {isDeleting ? '刪除中…' : '永久刪除'}
+              </button>
+            </div>
+          </section>
+        </div>
       )}
     </main>
   );
