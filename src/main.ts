@@ -1,7 +1,9 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
 
+import { FinancialItemService } from './application/financial-item-service';
 import { openBootstrapDatabase } from './infrastructure/database/bootstrap-database';
+import { SqliteFinancialItemRepository } from './infrastructure/database/sqlite-financial-item-repository';
 import {
   BootstrapStatus,
   IPC_CHANNELS,
@@ -13,14 +15,32 @@ declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 let mainWindow: BrowserWindow | null = null;
 let closeDatabase: (() => void) | null = null;
 
-function registerApplicationHandlers(databaseReady: boolean): void {
+function registerApplicationHandlers(
+  financialItemService: FinancialItemService,
+): void {
   ipcMain.handle(
     IPC_CHANNELS.getBootstrapStatus,
     (): BootstrapStatus => ({
       appName: 'FinanceHub',
-      databaseReady,
+      databaseReady: true,
       storagePolicy: 'sample-data-only',
     }),
+  );
+  ipcMain.handle(IPC_CHANNELS.listFinancialItems, () =>
+    financialItemService.list(),
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.createFinancialItem,
+    (_event, draft: unknown) => financialItemService.create(draft),
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.updateFinancialItem,
+    (_event, id: unknown, draft: unknown) =>
+      financialItemService.update(id, draft),
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.deactivateFinancialItem,
+    (_event, id: unknown) => financialItemService.deactivate(id),
   );
 }
 
@@ -52,8 +72,12 @@ void app.whenReady().then(() => {
   const databasePath = path.join(app.getPath('userData'), 'financehub.dev.db');
   const bootstrapDatabase = openBootstrapDatabase(databasePath);
   closeDatabase = bootstrapDatabase.close;
+  const repository = new SqliteFinancialItemRepository(
+    bootstrapDatabase.database,
+  );
+  const financialItemService = new FinancialItemService(repository);
 
-  registerApplicationHandlers(true);
+  registerApplicationHandlers(financialItemService);
   createWindow();
 
   app.on('activate', () => {
