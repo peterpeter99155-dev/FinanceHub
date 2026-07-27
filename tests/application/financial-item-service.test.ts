@@ -93,6 +93,7 @@ describe('FinancialItemService', () => {
     [{ ...ASSET_DRAFT, name: '' }, 'Name'],
     [{ ...ASSET_DRAFT, amount: 0 }, 'greater than zero'],
     [{ ...ASSET_DRAFT, amount: -1 }, 'cannot be negative'],
+    [{ ...ASSET_DRAFT, amount: 1_000_000_000_000 }, 'allowed maximum'],
     [{ ...ASSET_DRAFT, direction: 'unknown' }, 'direction'],
     [{ ...ASSET_DRAFT, includeInNetWorth: 'yes' }, 'boolean'],
   ])('rejects invalid renderer input %#', (input, message) => {

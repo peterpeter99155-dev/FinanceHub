@@ -60,6 +60,11 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     await expect(page.getByTestId('save-item')).toBeDisabled();
     await expect(page.getByText('金額必須大於 0。')).toBeVisible();
     await page.getByTestId('item-amount').fill('');
+    await page.getByTestId('item-amount').fill('1000000000000');
+    await expect(page.getByRole('status')).toContainText(
+      '單筆金額上限為 NT$ 999,999,999,999',
+    );
+    await expect(page.getByTestId('item-amount')).toHaveValue('');
 
     await createItem(page, {
       name: '示範銀行存款',

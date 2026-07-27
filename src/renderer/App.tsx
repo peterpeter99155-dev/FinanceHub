@@ -13,6 +13,7 @@ import {
   FinancialItem,
   FinancialItemDirection,
   FinancialItemType,
+  MAX_FINANCIAL_ITEM_AMOUNT_TWD,
 } from '../domain/financial-item';
 import type {
   FinancialItemDraft,
@@ -81,7 +82,9 @@ export function App() {
   const [pendingDeleteItem, setPendingDeleteItem] =
     useState<FinancialItem | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [notification, setNotification] = useState<string | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const notificationTimerRef = useRef<number | null>(null);
 
   const loadItems = useCallback(async () => {
     try {
@@ -98,6 +101,15 @@ export function App() {
   useEffect(() => {
     void loadItems();
   }, [loadItems]);
+
+  useEffect(
+    () => () => {
+      if (notificationTimerRef.current !== null) {
+        window.clearTimeout(notificationTimerRef.current);
+      }
+    },
+    [],
+  );
 
   const activeItems = useMemo(() => {
     if (viewState.status !== 'ready') {
@@ -190,6 +202,27 @@ export function App() {
     }));
   }
 
+  function changeAmount(rawValue: string) {
+    const digits = rawValue.replace(/\D/g, '');
+
+    if (
+      digits.length > 0 &&
+      Number(digits) > MAX_FINANCIAL_ITEM_AMOUNT_TWD
+    ) {
+      showNotification(
+        `單筆金額上限為 ${formatTwd(
+          MAX_FINANCIAL_ITEM_AMOUNT_TWD,
+        )}`,
+      );
+      return;
+    }
+
+    setDraft((current) => ({
+      ...current,
+      amount: digits,
+    }));
+  }
+
   function resetForm() {
     setEditingId(null);
     setDraft(EMPTY_DRAFT);
@@ -201,6 +234,19 @@ export function App() {
       window.focus();
       nameInputRef.current?.focus();
     }, 0);
+  }
+
+  function showNotification(message: string) {
+    setNotification(message);
+
+    if (notificationTimerRef.current !== null) {
+      window.clearTimeout(notificationTimerRef.current);
+    }
+
+    notificationTimerRef.current = window.setTimeout(() => {
+      setNotification(null);
+      notificationTimerRef.current = null;
+    }, 3_000);
   }
 
   return (
@@ -377,13 +423,11 @@ export function App() {
                     placeholder="0"
                     type="text"
                     value={draft.amount}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        amount: event.target.value.replace(/\D/g, ''),
-                      }))
-                    }
+                    onChange={(event) => changeAmount(event.target.value)}
                   />
+                  <small>
+                    單筆最高 {formatTwd(MAX_FINANCIAL_ITEM_AMOUNT_TWD)}
+                  </small>
                 </label>
                 {draft.amount === '0' && (
                   <p className="form-error" role="alert">
@@ -522,6 +566,12 @@ export function App() {
           </section>
         </div>
       )}
+
+      {notification && (
+        <div className="toast-notification" role="status">
+          {notification}
+        </div>
+      )}
     </main>
   );
 }
@@ -652,5 +702,23 @@ function formatUpdatedAt(value: string): string {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : '操作失敗，請稍後再試。';
+  if (!(error instanceof Error)) {
+    return '操作失敗，請稍後再試。';
+  }
+
+  if (error.message.includes('greater than zero')) {
+    return '金額必須大於 0。';
+  }
+
+  if (
+    error.message.includes('allowed maximum') ||
+    error.message.includes('supported maximum') ||
+    error.message.includes('safe integer')
+  ) {
+    return `單筆金額上限為 ${formatTwd(
+      MAX_FINANCIAL_ITEM_AMOUNT_TWD,
+    )}。`;
+  }
+
+  return '操作失敗，請確認輸入內容後再試。';
 }

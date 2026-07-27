@@ -4,6 +4,7 @@ import {
   DATA_STATUSES,
   FINANCIAL_ITEM_DIRECTIONS,
   FINANCIAL_ITEM_TYPES,
+  MAX_FINANCIAL_ITEM_AMOUNT_TWD,
   DataStatus,
   FinancialItem,
   FinancialItemDirection,
@@ -106,6 +107,10 @@ function parseDraft(input: unknown): FinancialItemDraft {
 
   if (amount === 0) {
     throw new Error('Amount must be greater than zero.');
+  }
+
+  if (amount > MAX_FINANCIAL_ITEM_AMOUNT_TWD) {
+    throw new Error('Amount exceeds the allowed maximum.');
   }
 
   if (typeof input.includeInNetWorth !== 'boolean') {

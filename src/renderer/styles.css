@@ -346,6 +346,12 @@ form label {
   font-weight: 700;
 }
 
+form label > small {
+  color: #78857d;
+  font-size: 0.74rem;
+  font-weight: 450;
+}
+
 input,
 select {
   width: 100%;
@@ -538,6 +544,36 @@ form .checkbox-label {
 .delete-button:disabled {
   cursor: wait;
   opacity: 0.65;
+}
+
+.toast-notification {
+  position: fixed;
+  z-index: 30;
+  top: 24px;
+  right: 24px;
+  max-width: min(380px, calc(100vw - 48px));
+  padding: 12px 16px;
+  border: 1px solid #d9c784;
+  border-radius: 12px;
+  color: #654f16;
+  background: #fff8d9;
+  box-shadow: 0 16px 44px rgb(37 45 39 / 18%);
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.5;
+  animation: toast-enter 160ms ease-out;
+}
+
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 1050px) {

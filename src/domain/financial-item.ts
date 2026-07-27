@@ -1,5 +1,7 @@
 import type { TwdAmount } from './money';
 
+export const MAX_FINANCIAL_ITEM_AMOUNT_TWD = 999_999_999_999;
+
 export const FINANCIAL_ITEM_DIRECTIONS = ['asset', 'liability'] as const;
 export type FinancialItemDirection =
   (typeof FINANCIAL_ITEM_DIRECTIONS)[number];
@@ -55,6 +57,12 @@ export function validateFinancialItem(item: FinancialItem): void {
 
   if (Number.isNaN(Date.parse(item.updatedAt))) {
     throw new Error('Financial item updatedAt must be an ISO date-time.');
+  }
+
+  if (item.amount > MAX_FINANCIAL_ITEM_AMOUNT_TWD) {
+    throw new Error(
+      'Financial item amount exceeds the supported maximum.',
+    );
   }
 
   const expectedDirection = ASSET_TYPES.has(item.type)
