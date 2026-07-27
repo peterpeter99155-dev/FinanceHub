@@ -9,7 +9,7 @@ FinanceHub 是一套以淨資產為核心、單一使用者、本機優先的個
 
 ## 目前階段
 
-專案目前處於 MVP 規劃與第一個 Sprint 準備階段，尚未開始處理真實財務資料。
+專案目前正在執行 Sprint 01，尚未開始處理真實財務資料。
 
 ## 核心方向
 
@@ -36,3 +36,29 @@ FinanceHub 是一套以淨資產為核心、單一使用者、本機優先的個
 - Electron Forge
 
 實際函式庫會在對應 Sprint 開始前確認，避免過早加入不必要的相依套件。
+
+## 本機開發
+
+需求：
+
+- Node.js 24
+- npm 11
+- Windows 10 或 11
+
+安裝與啟動：
+
+```powershell
+npm.cmd install
+npm.cmd start
+```
+
+驗證：
+
+```powershell
+npm.cmd run typecheck
+npm.cmd run lint
+npm.cmd test
+npm.cmd run package
+```
+
+> 目前資料庫尚未加密。正式加密完成前，只能使用假資料或匿名化資料，不得輸入真實金融資料。

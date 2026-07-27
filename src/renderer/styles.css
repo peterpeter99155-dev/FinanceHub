@@ -1,0 +1,134 @@
+:root {
+  color: #1c2a24;
+  background: #f5f7f4;
+  font-family:
+    Inter, "Noto Sans TC", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.shell {
+  min-height: 100vh;
+  padding: 72px clamp(32px, 8vw, 120px);
+  background:
+    radial-gradient(circle at top right, #dcebdc 0, transparent 34%),
+    #f5f7f4;
+}
+
+.hero {
+  max-width: 720px;
+}
+
+.eyebrow,
+.label {
+  margin: 0 0 12px;
+  color: #50705f;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+h1 {
+  margin: 0;
+  font-family: Georgia, "Noto Serif TC", serif;
+  font-size: clamp(3.2rem, 8vw, 6.5rem);
+  font-weight: 500;
+  letter-spacing: -0.055em;
+}
+
+.subtitle {
+  margin: 16px 0 0;
+  color: #506158;
+  font-size: 1.15rem;
+}
+
+.status-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 40px;
+  max-width: 920px;
+  margin-top: 72px;
+  padding: 32px;
+  border: 1px solid #d9e1dc;
+  border-radius: 24px;
+  background: rgb(255 255 255 / 78%);
+  box-shadow: 0 24px 70px rgb(42 67 54 / 9%);
+}
+
+.status-card h2 {
+  margin: 0 0 10px;
+  font-size: 1.65rem;
+}
+
+.status-card p:last-child {
+  max-width: 590px;
+  margin: 0;
+  color: #617168;
+  line-height: 1.65;
+}
+
+.badge {
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.badge.ready {
+  color: #165b3b;
+  background: #dbf3e5;
+}
+
+.badge.pending {
+  color: #715a15;
+  background: #fff1c9;
+}
+
+.badge.error {
+  color: #8c2525;
+  background: #fbe1e1;
+}
+
+.warning {
+  display: flex;
+  gap: 14px;
+  max-width: 920px;
+  margin-top: 24px;
+  padding: 16px 20px;
+  border-left: 3px solid #bc8e28;
+  color: #67562e;
+  background: #fff9e9;
+}
+
+@media (max-width: 700px) {
+  .shell {
+    padding: 48px 24px;
+  }
+
+  .status-card {
+    align-items: flex-start;
+    flex-direction: column;
+    margin-top: 48px;
+  }
+
+  .warning {
+    flex-direction: column;
+  }
+}

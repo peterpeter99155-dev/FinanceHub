@@ -150,17 +150,18 @@
 
 完成定義：以假資料完成新增、顯示、修改、停用、重啟保留的驗收示範。
 
-## 技術提案（開始實作前確認）
+## 已確認技術方向
 
-以下只供 Sprint 規劃，尚未取代 `04_Decision_Log.md` 中的已確認決策：
+以下方向已於 Sprint 開始前確認，正式決策記錄於 `04_Decision_Log.md`：
 
 - 本機資料庫：SQLite。
+- SQLite driver：Electron 所含 Node.js 的內建 SQLite API。
 - 金額表示：以 TWD 最小貨幣單位的整數儲存與運算；介面層負責格式化。
 - 資料存取：Repository 介面隔離 SQLite，migration 管理 schema。
 - 測試：領域單元測試、Repository 整合測試，以及一條 UI 垂直流程測試。
 - 永久刪除：本 Sprint 不提供，只提供停用。
 
-選擇 SQLite 是因為它符合單一使用者、本機優先及可持久化需求；透過 Repository 與 migration 隔離後，可避免財務領域規則依賴特定資料庫，並為後續加密方案保留替換邊界。實際 driver 與 migration 函式庫應在初始化專案時根據 Electron 相容性確認，再寫入決策紀錄。
+選擇 SQLite 是因為它符合單一使用者、本機優先及可持久化需求；透過 Repository 與 migration 隔離後，可避免財務領域規則依賴特定資料庫，並為後續加密方案保留替換邊界。技術驗證後採用 Node.js 內建 SQLite API，避免額外原生 driver 對 Python、C++ 建置工具及 Electron ABI 的依賴。
 
 ## 明確不納入
 
@@ -191,15 +192,15 @@
 - 第一個 Sprint 不需要選定股票價格、匯率、銀行或信用卡帳單來源。
 - 預設支出分類、待確認中心形式及匯出格式與本切片無關。
 
-### 開始實作前需要確認
+### 已確認
 
-1. 接受 SQLite 作為第一版本機資料庫方向。
-2. Sprint 1 是否以一週為 timebox；若週期不同，應保持 Sprint Goal 不變並調整工作量或拆分。
-3. 實際 SQLite driver 必須先驗證 Electron Forge Webpack 的原生模組封裝與 Windows 建置流程。
+1. SQLite 作為第一版本機資料庫。
+2. Sprint 1 採一週 timebox。
+3. Node.js 內建 SQLite API 已通過 Electron Forge Webpack 的 Windows 封裝與啟動驗證。
 
 ### 已知風險
 
-- SQLite driver 若含原生模組，Electron ABI 與封裝設定可能增加建置成本；應在 S1-01 做最小技術驗證。
+- Forge／Webpack／ESLint 開發工具鏈目前有 npm audit 傳遞相依警告；正式執行相依掃描為零，後續應追蹤上游更新，避免使用 `audit fix --force` 造成不相容降版。
 - 完整加密尚未完成，因此 Sprint 產物不得輸入真實財務資料。
 - Sprint 1 的單一 TWD 金額模型是刻意限縮；後續加入外幣與股票時，應擴充估值模型，不可把浮點數直接加入領域計算。
 - 「帳戶」與一般資產／負債項目的長期資料模型仍需在後續使用回饋中細化；本 Sprint 應保持領域介面可演進，避免把 UI 表單直接等同資料表。
