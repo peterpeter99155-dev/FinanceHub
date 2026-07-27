@@ -16,16 +16,21 @@ describe('openBootstrapDatabase', () => {
   it('applies the initial migration to a new database', () => {
     connection = openBootstrapDatabase(':memory:');
 
-    const migration = connection.database
+    const migrations = connection.database
       .prepare(
-        'SELECT version, applied_at FROM schema_migrations WHERE version = ?',
+        'SELECT version, applied_at FROM schema_migrations ORDER BY version',
       )
-      .get(1) as { version: number; applied_at: string } | undefined;
+      .all() as unknown as {
+      version: number;
+      applied_at: string;
+    }[];
 
-    expect(migration?.version).toBe(1);
-    expect(migration?.applied_at).toMatch(
-      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
-    );
+    expect(migrations.map(({ version }) => version)).toEqual([1, 2]);
+    for (const migration of migrations) {
+      expect(migration.applied_at).toMatch(
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
+      );
+    }
   });
 
   it('enables foreign key checks', () => {
