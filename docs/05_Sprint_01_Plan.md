@@ -2,7 +2,7 @@
 
 ## 文件資訊
 
-- 狀態：規劃草案
+- 狀態：實作完成，待 Sprint Review
 - 依據：`01_Product_Vision.md`、`02_Requirements.md`、`03_Business_Rules.md`、`04_Decision_Log.md`
 - 對應決策：DEC-001、DEC-003、DEC-004、DEC-009、DEC-010、DEC-011、DEC-012
 - 建議週期：1 週
