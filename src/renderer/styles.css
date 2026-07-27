@@ -80,7 +80,7 @@ h2 {
   font-weight: 700;
 }
 
-.summary-grid,
+.summary-equation,
 .workspace-grid {
   display: grid;
   max-width: 1440px;
@@ -88,9 +88,10 @@ h2 {
   margin-left: auto;
 }
 
-.summary-grid {
-  grid-template-columns: 1.35fr 1fr 1fr;
+.summary-equation {
+  grid-template-columns: minmax(260px, 1.45fr) auto minmax(210px, 1fr) auto minmax(210px, 1fr);
   gap: 16px;
+  align-items: stretch;
   margin-bottom: 20px;
 }
 
@@ -109,6 +110,18 @@ h2 {
   color: #f8fbf8;
   border-color: #244b38;
   background: #244b38;
+}
+
+.summary-card.featured strong {
+  font-size: clamp(2rem, 3.8vw, 3.1rem);
+}
+
+.equation-symbol {
+  display: grid;
+  color: #7b8981;
+  font-family: Georgia, serif;
+  font-size: 1.7rem;
+  place-items: center;
 }
 
 .summary-card span {
@@ -528,11 +541,35 @@ form .checkbox-label {
 }
 
 @media (max-width: 1050px) {
+  .summary-equation {
+    grid-template-columns: minmax(240px, 1.3fr) auto minmax(180px, 1fr) auto minmax(180px, 1fr);
+    gap: 10px;
+  }
+
   .workspace-grid {
     grid-template-columns: 1fr;
   }
 
   .form-panel {
     max-width: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .summary-equation {
+    grid-template-columns: 1fr auto 1fr;
+  }
+
+  .summary-card {
+    min-height: 112px;
+    padding: 18px;
+  }
+
+  .summary-card.featured {
+    grid-column: 1 / -1;
+  }
+
+  .summary-equation > .equation-symbol:first-of-type {
+    display: none;
   }
 }

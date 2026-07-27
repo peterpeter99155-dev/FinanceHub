@@ -28,6 +28,11 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     let page = await application.firstWindow();
 
     await expect(page.getByTestId('net-worth')).toContainText('NT$ 0');
+    await expect(page.getByTestId('summary-equation')).toContainText(
+      '淨資產',
+    );
+    await expect(page.getByTestId('summary-equation')).toContainText('=');
+    await expect(page.getByTestId('summary-equation')).toContainText('−');
     await expect(page.getByTestId('item-amount')).toHaveAttribute(
       'type',
       'text',

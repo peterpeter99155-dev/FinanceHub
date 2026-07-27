@@ -229,18 +229,28 @@ export function App() {
 
       {viewState.status === 'ready' && (
         <>
-          <section className="summary-grid" aria-label="淨資產總覽">
+          <section
+            className="summary-equation"
+            aria-label="淨資產等於總資產減去總負債"
+            data-testid="summary-equation"
+          >
             <SummaryCard
               label="淨資產"
               value={viewState.snapshot.summary.netWorth}
               featured
               testId="net-worth"
             />
+            <span aria-hidden="true" className="equation-symbol">
+              =
+            </span>
             <SummaryCard
               label="總資產"
               value={viewState.snapshot.summary.totalAssets}
               testId="total-assets"
             />
+            <span aria-hidden="true" className="equation-symbol">
+              −
+            </span>
             <SummaryCard
               label="總負債"
               value={viewState.snapshot.summary.totalLiabilities}
