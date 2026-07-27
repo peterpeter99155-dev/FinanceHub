@@ -141,9 +141,9 @@ export function App() {
     setActionError(null);
   }
 
-  async function deactivateItem(item: FinancialItem) {
+  async function deleteItem(item: FinancialItem) {
     const accepted = window.confirm(
-      `停用「${item.name}」？資料會保留，但不再計入淨資產。`,
+      `永久刪除「${item.name}」？此操作無法復原。`,
     );
 
     if (!accepted) {
@@ -153,7 +153,7 @@ export function App() {
     setActionError(null);
     try {
       const snapshot =
-        await window.financeHub.financialItems.deactivate(item.id);
+        await window.financeHub.financialItems.delete(item.id);
       setViewState({ status: 'ready', snapshot });
       if (editingId === item.id) {
         resetForm();
@@ -181,7 +181,7 @@ export function App() {
     <main className="shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">LOCAL-FIRST FINANCE</p>
+          <p className="eyebrow">本機財務管理</p>
           <h1>FinanceHub</h1>
         </div>
         <span className="environment-badge">僅限假資料</span>
@@ -226,10 +226,9 @@ export function App() {
             <section className="panel items-panel">
               <div className="section-heading">
                 <div>
-                  <p className="label">PORTFOLIO</p>
+                  <p className="label">財務總覽</p>
                   <h2>資產與負債</h2>
                 </div>
-                <span>{activeItems.length} 個啟用項目</span>
               </div>
 
               {activeItems.length === 0 ? (
@@ -271,9 +270,9 @@ export function App() {
                         <button
                           className="text-button danger"
                           type="button"
-                          onClick={() => void deactivateItem(item)}
+                          onClick={() => void deleteItem(item)}
                         >
-                          停用
+                          刪除
                         </button>
                       </div>
                     </article>
@@ -285,7 +284,7 @@ export function App() {
             <section className="panel form-panel">
               <div className="section-heading">
                 <div>
-                  <p className="label">MANUAL ENTRY</p>
+                  <p className="label">手動新增</p>
                   <h2>{editingId ? '編輯項目' : '新增項目'}</h2>
                 </div>
                 {editingId && (
@@ -377,6 +376,11 @@ export function App() {
                     }
                   />
                 </label>
+                {draft.amount === '0' && (
+                  <p className="form-error" role="alert">
+                    金額必須大於 0。
+                  </p>
+                )}
 
                 <details
                   className="advanced-settings"
@@ -417,8 +421,13 @@ export function App() {
                           }))
                         }
                       />
-                      計入淨資產
+                      {draft.direction === 'asset'
+                        ? '列入我的資產'
+                        : '列入我的負債'}
                     </label>
+                    <p className="field-help">
+                      關閉後只保留資料，不列入首頁總額。
+                    </p>
 
                     {draft.status === 'pending_confirmation' && (
                       <p className="form-notice">
@@ -436,7 +445,7 @@ export function App() {
                 <button
                   className="primary-button"
                   data-testid="save-item"
-                  disabled={isSaving}
+                  disabled={isSaving || draft.amount === '0'}
                   type="submit"
                 >
                   {isSaving
@@ -477,19 +486,21 @@ function SummaryCard({
 }
 
 function formatTwd(value: number): string {
-  return new Intl.NumberFormat('zh-TW', {
-    style: 'currency',
-    currency: 'TWD',
+  const formattedAmount = new Intl.NumberFormat('zh-TW', {
     maximumFractionDigits: 0,
   }).format(value);
+
+  return `NT$ ${formattedAmount}`;
 }
 
 function formatUpdatedAt(value: string): string {
   return new Intl.DateTimeFormat('zh-TW', {
-    month: 'numeric',
-    day: 'numeric',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
+    hour12: false,
   }).format(new Date(value));
 }
 

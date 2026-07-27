@@ -5,7 +5,7 @@ export const IPC_CHANNELS = {
   listFinancialItems: 'financial-items:list',
   createFinancialItem: 'financial-items:create',
   updateFinancialItem: 'financial-items:update',
-  deactivateFinancialItem: 'financial-items:deactivate',
+  deleteFinancialItem: 'financial-items:delete',
 } as const;
 
 export interface BootstrapStatus {

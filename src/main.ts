@@ -39,8 +39,8 @@ function registerApplicationHandlers(
       financialItemService.update(id, draft),
   );
   ipcMain.handle(
-    IPC_CHANNELS.deactivateFinancialItem,
-    (_event, id: unknown) => financialItemService.deactivate(id),
+    IPC_CHANNELS.deleteFinancialItem,
+    (_event, id: unknown) => financialItemService.delete(id),
   );
 }
 

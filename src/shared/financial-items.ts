@@ -30,5 +30,5 @@ export interface FinancialItemsApi {
     id: string,
     draft: FinancialItemDraft,
   ): Promise<FinancialItemSnapshot>;
-  deactivate(id: string): Promise<FinancialItemSnapshot>;
+  delete(id: string): Promise<FinancialItemSnapshot>;
 }

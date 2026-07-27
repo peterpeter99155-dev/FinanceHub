@@ -27,7 +27,7 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     application = await launchApplication(userDataDirectory);
     let page = await application.firstWindow();
 
-    await expect(page.getByTestId('net-worth')).toContainText('$0');
+    await expect(page.getByTestId('net-worth')).toContainText('NT$ 0');
     await expect(page.getByTestId('item-amount')).toHaveAttribute(
       'type',
       'text',
@@ -37,12 +37,23 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
       'open',
       '',
     );
+    await page.getByTestId('advanced-settings').locator('summary').click();
+    await expect(page.getByText('列入我的資產')).toBeVisible();
+    await page.getByRole('button', { name: '負債' }).click();
+    await expect(page.getByText('列入我的負債')).toBeVisible();
+    await page.getByRole('button', { name: '資產' }).click();
+    await page.getByTestId('advanced-settings').locator('summary').click();
+    await page.getByTestId('item-amount').fill('0');
+    await expect(page.getByTestId('save-item')).toBeDisabled();
+    await expect(page.getByText('金額必須大於 0。')).toBeVisible();
+    await page.getByTestId('item-amount').fill('');
 
     await createItem(page, {
       name: '示範銀行存款',
       type: 'bank_deposit',
       amount: '1000000',
     });
+    await expect(page.locator('time').first()).toContainText('2026');
     await createItem(page, {
       name: '示範房產',
       type: 'property',
@@ -56,13 +67,13 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     });
 
     await expect(page.getByTestId('total-assets')).toContainText(
-      '$9,000,000',
+      'NT$ 9,000,000',
     );
     await expect(page.getByTestId('total-liabilities')).toContainText(
-      '$5,000,000',
+      'NT$ 5,000,000',
     );
     await expect(page.getByTestId('net-worth')).toContainText(
-      '$4,000,000',
+      'NT$ 4,000,000',
     );
 
     const mortgageRow = page
@@ -74,7 +85,7 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     await page.getByTestId('save-item').click();
 
     await expect(page.getByTestId('net-worth')).toContainText(
-      '$4,100,000',
+      'NT$ 4,100,000',
     );
 
     await application.close();
@@ -82,7 +93,7 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     page = await application.firstWindow();
 
     await expect(page.getByTestId('net-worth')).toContainText(
-      '$4,100,000',
+      'NT$ 4,100,000',
     );
     await expect(
       page.getByText('示範銀行存款', { exact: true }),
@@ -95,16 +106,16 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
       .locator('..')
       .locator('..');
     page.once('dialog', (dialog) => dialog.accept());
-    await propertyRow.getByRole('button', { name: '停用' }).click();
+    await propertyRow.getByRole('button', { name: '刪除' }).click();
 
     await expect(
       page.getByText('示範房產', { exact: true }),
     ).toHaveCount(0);
     await expect(page.getByTestId('total-assets')).toContainText(
-      '$1,000,000',
+      'NT$ 1,000,000',
     );
     await expect(page.getByTestId('total-liabilities')).toContainText(
-      '$4,900,000',
+      'NT$ 4,900,000',
     );
   } finally {
     await application?.close();

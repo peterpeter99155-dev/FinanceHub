@@ -301,6 +301,13 @@ input:focus::placeholder {
   line-height: 1.5;
 }
 
+.field-help {
+  margin: -10px 0 0 26px;
+  color: #78857d;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
 .segmented-control {
   display: grid;
   grid-template-columns: 1fr 1fr;

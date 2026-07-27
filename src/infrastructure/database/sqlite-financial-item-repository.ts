@@ -106,18 +106,10 @@ export class SqliteFinancialItemRepository
     }
   }
 
-  deactivate(id: string, updatedAt: string): void {
-    if (Number.isNaN(Date.parse(updatedAt))) {
-      throw new Error('updatedAt must be an ISO date-time.');
-    }
-
+  delete(id: string): void {
     const result = this.database
-      .prepare(
-        `UPDATE financial_items
-         SET is_active = 0, updated_at = ?
-         WHERE id = ?`,
-      )
-      .run(updatedAt, id);
+      .prepare('DELETE FROM financial_items WHERE id = ?')
+      .run(id);
 
     if (Number(result.changes) !== 1) {
       throw new Error(`Financial item "${id}" was not found.`);

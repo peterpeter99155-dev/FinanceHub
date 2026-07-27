@@ -61,9 +61,9 @@ export class FinancialItemService {
     return this.snapshot();
   }
 
-  deactivate(idInput: unknown): FinancialItemSnapshot {
+  delete(idInput: unknown): FinancialItemSnapshot {
     const id = parseId(idInput);
-    this.repository.deactivate(id, this.now());
+    this.repository.delete(id);
     return this.snapshot();
   }
 
@@ -103,6 +103,10 @@ function parseDraft(input: unknown): FinancialItemDraft {
   }
 
   const amount = createTwdAmount(input.amount);
+
+  if (amount === 0) {
+    throw new Error('Amount must be greater than zero.');
+  }
 
   if (typeof input.includeInNetWorth !== 'boolean') {
     throw new Error('includeInNetWorth must be a boolean.');

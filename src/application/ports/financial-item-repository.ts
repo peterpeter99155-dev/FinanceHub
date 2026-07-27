@@ -5,5 +5,5 @@ export interface FinancialItemRepository {
   findById(id: string): FinancialItem | undefined;
   create(item: FinancialItem): void;
   update(item: FinancialItem): void;
-  deactivate(id: string, updatedAt: string): void;
+  delete(id: string): void;
 }

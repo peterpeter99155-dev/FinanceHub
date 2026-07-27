@@ -68,27 +68,18 @@ describe('SqliteFinancialItemRepository', () => {
     expect(repository.findById(updated.id)).toEqual(updated);
   });
 
-  it('deactivates without deleting the item', () => {
+  it('permanently deletes an existing item', () => {
     repository.create(createItem());
 
-    repository.deactivate('asset-1', '2026-07-27T10:00:00.000Z');
+    repository.delete('asset-1');
 
-    expect(repository.findById('asset-1')).toMatchObject({
-      id: 'asset-1',
-      isActive: false,
-      updatedAt: '2026-07-27T10:00:00.000Z',
-    });
-    expect(repository.list()).toHaveLength(1);
+    expect(repository.findById('asset-1')).toBeUndefined();
+    expect(repository.list()).toHaveLength(0);
   });
 
-  it('rejects updates and deactivation for missing items', () => {
+  it('rejects updates and deletion for missing items', () => {
     expect(() => repository.update(createItem())).toThrow('was not found');
-    expect(() =>
-      repository.deactivate(
-        'missing',
-        '2026-07-27T10:00:00.000Z',
-      ),
-    ).toThrow('was not found');
+    expect(() => repository.delete('missing')).toThrow('was not found');
   });
 
   it('persists items after the database is reopened', () => {

@@ -70,12 +70,12 @@ describe('FinancialItemService', () => {
     expect(snapshot.summary.netWorth).toBe(1_100_000);
   });
 
-  it('deactivates an item while preserving it in storage', () => {
+  it('permanently deletes an item', () => {
     service.create(ASSET_DRAFT);
 
-    const snapshot = service.deactivate('asset-1');
+    const snapshot = service.delete('asset-1');
 
-    expect(snapshot.items[0].isActive).toBe(false);
+    expect(snapshot.items).toHaveLength(0);
     expect(snapshot.summary.netWorth).toBe(0);
   });
 
@@ -91,6 +91,7 @@ describe('FinancialItemService', () => {
 
   it.each([
     [{ ...ASSET_DRAFT, name: '' }, 'Name'],
+    [{ ...ASSET_DRAFT, amount: 0 }, 'greater than zero'],
     [{ ...ASSET_DRAFT, amount: -1 }, 'cannot be negative'],
     [{ ...ASSET_DRAFT, direction: 'unknown' }, 'direction'],
     [{ ...ASSET_DRAFT, includeInNetWorth: 'yes' }, 'boolean'],

@@ -16,8 +16,8 @@ const financeHubApi: FinanceHubApi = Object.freeze({
         id,
         draft,
       ),
-    deactivate: (id: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.deactivateFinancialItem, id),
+    delete: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.deleteFinancialItem, id),
   }),
 });
 
