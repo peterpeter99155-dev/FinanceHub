@@ -502,7 +502,7 @@ export function TransactionsView({
               draft.kind === 'credit_card_purchase') && (
               <label>
                 <span className="field-heading">
-                  類型
+                  分類
                   <button
                     className="inline-action"
                     type="button"
@@ -512,7 +512,7 @@ export function TransactionsView({
                       )
                     }
                   >
-                    ＋新增類型
+                    ＋新增分類
                   </button>
                 </span>
                 <select
@@ -525,7 +525,7 @@ export function TransactionsView({
                     }))
                   }
                 >
-                  <option value="">請選擇類型</option>
+                  <option value="">請選擇分類</option>
                   {relevantCategories.map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}
@@ -584,7 +584,7 @@ export function TransactionsView({
               名稱（選填）
               <input
                 maxLength={50}
-                placeholder="留空時使用類型名稱"
+                placeholder="留空時使用分類名稱"
                 value={draft.name}
                 onChange={(event) =>
                   setDraft((current) => ({
@@ -1066,7 +1066,7 @@ function transactionErrorMessage(error: unknown): string {
   }
 
   if (error.message.includes('category')) {
-    return '請選擇正確的收入或支出類型。';
+    return '請選擇正確的收入或支出分類。';
   }
 
   if (error.message.includes('account')) {

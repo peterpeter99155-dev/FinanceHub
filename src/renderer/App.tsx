@@ -774,7 +774,14 @@ export function App() {
           }}
           onCustomTypesChange={setCustomTypes}
           onError={setManagementError}
-          onSaved={() => showNotification('✓ 類型名稱已儲存')}
+          onSaved={() =>
+            showNotification(
+              managementSection === 'asset_type' ||
+                managementSection === 'liability_type'
+                ? '✓ 類型名稱已儲存'
+                : '✓ 分類名稱已儲存',
+            )
+          }
           onSectionChange={setManagementSection}
         />
       )}
@@ -1018,7 +1025,12 @@ function ManagementDialog({
       }
       setNewName('');
     } catch (caughtError) {
-      onError(managementErrorMessage(caughtError));
+      onError(
+        managementErrorMessage(
+          caughtError,
+          isTypeSection ? '類型' : '分類',
+        ),
+      );
     } finally {
       setIsSaving(false);
     }
@@ -1054,7 +1066,12 @@ function ManagementDialog({
       }
       return true;
     } catch (caughtError) {
-      onError(managementErrorMessage(caughtError));
+      onError(
+        managementErrorMessage(
+          caughtError,
+          isTypeSection ? '類型' : '分類',
+        ),
+      );
       return false;
     }
   }
@@ -1078,7 +1095,9 @@ function ManagementDialog({
       }
     } catch {
       onError(
-        '這個類型已被資料使用，請先停用；之後可將交易移至其他類型。',
+        isTypeSection
+          ? '這個類型已有資產或負債使用，不能停用或刪除。'
+          : '這個分類已被交易使用，請先將交易移至其他分類。',
       );
     }
   }
@@ -1102,7 +1121,7 @@ function ManagementDialog({
         <div className="section-heading">
           <div>
             <p className="label">自訂設定</p>
-            <h2 id="management-dialog-title">管理類型</h2>
+            <h2 id="management-dialog-title">管理類型與分類</h2>
           </div>
           <button
             aria-label="關閉"
@@ -1119,8 +1138,8 @@ function ManagementDialog({
             [
               ['asset_type', '資產類型'],
               ['liability_type', '負債類型'],
-              ['income', '收入類型'],
-              ['expense', '支出類型'],
+              ['income', '收入分類'],
+              ['expense', '支出分類'],
             ] as const
           ).map(([value, label]) => (
             <button
@@ -1144,7 +1163,9 @@ function ManagementDialog({
           <input
             aria-label="新名稱"
             maxLength={20}
-            placeholder="輸入新的類型名稱"
+            placeholder={
+              isTypeSection ? '輸入新的類型名稱' : '輸入新的分類名稱'
+            }
             value={newName}
             onChange={(event) => setNewName(event.target.value)}
             onKeyDown={(event) => {
@@ -1359,7 +1380,10 @@ function financialTone(
   return 'neutral';
 }
 
-function managementErrorMessage(error: unknown): string {
+function managementErrorMessage(
+  error: unknown,
+  subject: '類型' | '分類',
+): string {
   if (!(error instanceof Error)) {
     return '操作失敗，請確認輸入內容後再試。';
   }
@@ -1372,14 +1396,16 @@ function managementErrorMessage(error: unknown): string {
   }
 
   if (error.message.includes('Built-in')) {
-    return '系統預設類型不能修改或刪除。';
+    return `系統預設${subject}不能修改或刪除。`;
   }
 
   if (
     error.message.includes('used custom type') ||
     error.message.includes('used by')
   ) {
-    return '這個類型已有資產或負債使用，不能停用或刪除。';
+    return subject === '類型'
+      ? '這個類型已有資產或負債使用，不能停用或刪除。'
+      : '這個分類已被交易使用，不能直接刪除。';
   }
 
   return getErrorMessage(error);
