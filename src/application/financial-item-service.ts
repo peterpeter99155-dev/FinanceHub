@@ -17,6 +17,7 @@ import type {
   FinancialItemSnapshot,
 } from '../shared/financial-items';
 import { FINANCIAL_ITEM_TYPE_LABELS } from '../shared/financial-item-labels';
+import type { FinancialItemCustomTypeRepository } from './ports/financial-item-custom-type-repository';
 import type { FinancialItemRepository } from './ports/financial-item-repository';
 
 export class FinancialItemService {
@@ -24,6 +25,7 @@ export class FinancialItemService {
     private readonly repository: FinancialItemRepository,
     private readonly createId: () => string = randomUUID,
     private readonly now: () => string = () => new Date().toISOString(),
+    private readonly customTypeRepository?: FinancialItemCustomTypeRepository,
   ) {}
 
   list(): FinancialItemSnapshot {
@@ -31,7 +33,7 @@ export class FinancialItemService {
   }
 
   create(input: unknown): FinancialItemSnapshot {
-    const draft = parseDraft(input);
+    const draft = this.resolveCustomType(parseDraft(input));
     const item: FinancialItem = {
       id: this.createId(),
       ...draft,
@@ -52,7 +54,7 @@ export class FinancialItemService {
       throw new Error(`Financial item "${id}" was not found.`);
     }
 
-    const draft = parseDraft(input);
+    const draft = this.resolveCustomType(parseDraft(input));
     this.repository.update({
       ...existing,
       ...draft,
@@ -65,6 +67,13 @@ export class FinancialItemService {
 
   delete(idInput: unknown): FinancialItemSnapshot {
     const id = parseId(idInput);
+
+    if (this.repository.countTransactions(id) > 0) {
+      throw new Error(
+        'Financial item cannot be deleted because it has transaction history.',
+      );
+    }
+
     this.repository.delete(id);
     return this.snapshot();
   }
@@ -77,6 +86,41 @@ export class FinancialItemService {
       items,
       summary,
     };
+  }
+
+  private resolveCustomType(
+    draft: FinancialItemDraft,
+  ): FinancialItemDraft {
+    if (!draft.customTypeId) {
+      return draft;
+    }
+
+    const customType = this.customTypeRepository?.findById(
+      draft.customTypeId,
+    );
+
+    if (!customType || !customType.isActive) {
+      throw new Error('Selected custom type is unavailable.');
+    }
+
+    if (customType.direction !== draft.direction) {
+      throw new Error(
+        'Selected custom type does not match the item direction.',
+      );
+    }
+
+    const expectedBaseType =
+      draft.direction === 'asset' ? 'custom_asset' : 'custom_liability';
+
+    if (draft.type !== expectedBaseType) {
+      throw new Error('Selected custom type has an invalid base type.');
+    }
+
+    const defaultBaseName = FINANCIAL_ITEM_TYPE_LABELS[draft.type];
+
+    return draft.name === defaultBaseName
+      ? { ...draft, name: customType.name }
+      : draft;
   }
 }
 
@@ -121,14 +165,32 @@ function parseDraft(input: unknown): FinancialItemDraft {
     throw new Error('includeInNetWorth must be a boolean.');
   }
 
+  const customTypeId =
+    input.customTypeId === undefined
+      ? undefined
+      : parseOptionalId(input.customTypeId, 'customTypeId');
+
   return {
     name,
     direction: direction as FinancialItemDirection,
     type: type as FinancialItemType,
+    customTypeId,
     amount,
     status: status as DataStatus,
     includeInNetWorth: input.includeInNetWorth,
   };
+}
+
+function parseOptionalId(value: unknown, field: string): string {
+  if (
+    typeof value !== 'string' ||
+    value.trim().length === 0 ||
+    value.length > 100
+  ) {
+    throw new Error(`Financial item ${field} is invalid.`);
+  }
+
+  return value;
 }
 
 function parseId(value: unknown): string {

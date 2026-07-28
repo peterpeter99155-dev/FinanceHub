@@ -9,6 +9,7 @@ export interface FinancialItemDraft {
   readonly name: string;
   readonly direction: FinancialItemDirection;
   readonly type: FinancialItemType;
+  readonly customTypeId?: string;
   readonly amount: number;
   readonly status: DataStatus;
   readonly includeInNetWorth: boolean;

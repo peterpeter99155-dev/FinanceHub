@@ -7,6 +7,7 @@ import {
   openBootstrapDatabase,
 } from '../../src/infrastructure/database/bootstrap-database';
 import { SqliteFinancialItemRepository } from '../../src/infrastructure/database/sqlite-financial-item-repository';
+import { SqliteFinancialItemCustomTypeRepository } from '../../src/infrastructure/database/sqlite-financial-item-custom-type-repository';
 
 const ASSET_DRAFT: FinancialItemDraft = {
   name: '示範銀行存款',
@@ -64,6 +65,37 @@ describe('FinancialItemService', () => {
     expect(snapshot.items[0].name).toBe('現金');
   });
 
+  it('uses the selected custom type name when the item name is blank', () => {
+    const customTypes = new SqliteFinancialItemCustomTypeRepository(
+      connection.database,
+    );
+    customTypes.create({
+      id: 'asset-emergency-fund',
+      direction: 'asset',
+      name: '緊急預備金',
+      isActive: true,
+    });
+    service = new FinancialItemService(
+      new SqliteFinancialItemRepository(connection.database),
+      () => 'asset-1',
+      () => currentTime,
+      customTypes,
+    );
+
+    const snapshot = service.create({
+      ...ASSET_DRAFT,
+      name: '',
+      type: 'custom_asset',
+      customTypeId: 'asset-emergency-fund',
+    });
+
+    expect(snapshot.items[0]).toMatchObject({
+      name: '緊急預備金',
+      type: 'custom_asset',
+      customTypeId: 'asset-emergency-fund',
+    });
+  });
+
   it('allows duplicate names because ids remain unique', () => {
     let idSequence = 0;
     service = new FinancialItemService(
@@ -104,6 +136,26 @@ describe('FinancialItemService', () => {
 
     expect(snapshot.items).toHaveLength(0);
     expect(snapshot.summary.netWorth).toBe(0);
+  });
+
+  it('prevents permanent deletion after an item has transaction history', () => {
+    service.create(ASSET_DRAFT);
+    connection.database.exec(`
+      INSERT INTO financial_transactions (
+        id, kind, amount, occurred_at, financial_month,
+        source_account_id, destination_account_id, category_id,
+        name, note, created_at, updated_at
+      ) VALUES (
+        'expense-1', 'expense', 100, '2026-07-27T07:00:00.000Z',
+        '2026-07', 'asset-1', NULL, 'expense-other', '', '',
+        '2026-07-27T08:00:00.000Z', '2026-07-27T08:00:00.000Z'
+      );
+    `);
+
+    expect(() => service.delete('asset-1')).toThrow(
+      'has transaction history',
+    );
+    expect(service.list().items).toHaveLength(1);
   });
 
   it('keeps pending-confirmation items out of official totals', () => {

@@ -26,6 +26,141 @@ const MIGRATIONS: readonly Migration[] = [
         ON financial_items (is_active, direction);
     `,
   },
+  {
+    version: 3,
+    sql: `
+      CREATE TABLE financial_categories (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL CHECK (kind IN ('income', 'expense')),
+        name TEXT NOT NULL CHECK (
+          length(trim(name)) BETWEEN 1 AND 20
+        ),
+        is_built_in INTEGER NOT NULL CHECK (is_built_in IN (0, 1)),
+        is_active INTEGER NOT NULL CHECK (is_active IN (0, 1))
+      );
+
+      CREATE UNIQUE INDEX financial_categories_active_name_idx
+        ON financial_categories (kind, name COLLATE NOCASE)
+        WHERE is_active = 1;
+
+      CREATE TABLE financial_transactions (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL CHECK (
+          kind IN (
+            'income',
+            'expense',
+            'transfer',
+            'credit_card_purchase',
+            'credit_card_payment'
+          )
+        ),
+        amount INTEGER NOT NULL CHECK (
+          amount > 0 AND amount <= 999999999999
+        ),
+        occurred_at TEXT NOT NULL,
+        financial_month TEXT NOT NULL CHECK (
+          financial_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+        ),
+        source_account_id TEXT,
+        destination_account_id TEXT,
+        category_id TEXT,
+        name TEXT NOT NULL CHECK (length(trim(name)) <= 50),
+        note TEXT NOT NULL CHECK (length(trim(note)) <= 200),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (source_account_id)
+          REFERENCES financial_items (id) ON DELETE RESTRICT,
+        FOREIGN KEY (destination_account_id)
+          REFERENCES financial_items (id) ON DELETE RESTRICT,
+        FOREIGN KEY (category_id)
+          REFERENCES financial_categories (id) ON DELETE RESTRICT
+      );
+
+      CREATE INDEX financial_transactions_month_time_idx
+        ON financial_transactions (
+          financial_month,
+          occurred_at DESC,
+          id ASC
+        );
+
+      CREATE INDEX financial_transactions_source_account_idx
+        ON financial_transactions (source_account_id);
+
+      CREATE INDEX financial_transactions_destination_account_idx
+        ON financial_transactions (destination_account_id);
+
+      CREATE INDEX financial_transactions_category_idx
+        ON financial_transactions (category_id);
+    `,
+  },
+  {
+    version: 4,
+    sql: `
+      CREATE TABLE financial_item_custom_types (
+        id TEXT PRIMARY KEY,
+        direction TEXT NOT NULL CHECK (
+          direction IN ('asset', 'liability')
+        ),
+        name TEXT NOT NULL CHECK (
+          length(trim(name)) BETWEEN 1 AND 20
+        ),
+        is_active INTEGER NOT NULL CHECK (is_active IN (0, 1))
+      );
+
+      CREATE UNIQUE INDEX financial_item_custom_types_active_name_idx
+        ON financial_item_custom_types (direction, name COLLATE NOCASE)
+        WHERE is_active = 1;
+
+      ALTER TABLE financial_items
+        ADD COLUMN custom_type_id TEXT
+        REFERENCES financial_item_custom_types (id) ON DELETE RESTRICT;
+
+      CREATE INDEX financial_items_custom_type_idx
+        ON financial_items (custom_type_id);
+
+      INSERT OR IGNORE INTO financial_categories (
+        id, kind, name, is_built_in, is_active
+      ) VALUES
+        ('income-salary', 'income', '薪資', 1, 1),
+        ('income-bonus', 'income', '獎金', 1, 1),
+        ('income-interest', 'income', '利息', 1, 1),
+        ('income-investment', 'income', '投資收入', 1, 1),
+        ('income-other', 'income', '其他', 1, 1),
+        ('expense-food', 'expense', '飲食', 1, 1),
+        ('expense-transportation', 'expense', '交通', 1, 1),
+        ('expense-housing', 'expense', '居住', 1, 1),
+        ('expense-communication', 'expense', '通訊', 1, 1),
+        ('expense-entertainment', 'expense', '娛樂', 1, 1),
+        ('expense-medical', 'expense', '醫療', 1, 1),
+        ('expense-education', 'expense', '教育', 1, 1),
+        ('expense-insurance', 'expense', '保險', 1, 1),
+        ('expense-tax', 'expense', '稅費', 1, 1),
+        ('expense-other', 'expense', '其他', 1, 1);
+    `,
+  },
+  {
+    version: 5,
+    sql: `
+      INSERT OR IGNORE INTO financial_categories (
+        id, kind, name, is_built_in, is_active
+      ) VALUES
+        ('income-salary', 'income', '薪資', 1, 1),
+        ('income-bonus', 'income', '獎金', 1, 1),
+        ('income-interest', 'income', '利息', 1, 1),
+        ('income-investment', 'income', '投資收入', 1, 1),
+        ('income-other', 'income', '其他', 1, 1),
+        ('expense-food', 'expense', '飲食', 1, 1),
+        ('expense-transportation', 'expense', '交通', 1, 1),
+        ('expense-housing', 'expense', '居住', 1, 1),
+        ('expense-communication', 'expense', '通訊', 1, 1),
+        ('expense-entertainment', 'expense', '娛樂', 1, 1),
+        ('expense-medical', 'expense', '醫療', 1, 1),
+        ('expense-education', 'expense', '教育', 1, 1),
+        ('expense-insurance', 'expense', '保險', 1, 1),
+        ('expense-tax', 'expense', '稅費', 1, 1),
+        ('expense-other', 'expense', '其他', 1, 1);
+    `,
+  },
 ] as const;
 
 export interface BootstrapDatabase {

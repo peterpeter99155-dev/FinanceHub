@@ -167,6 +167,29 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
         exact: true,
       }),
     ).toBeVisible();
+
+    await page.getByRole('button', { name: '＋新增類型' }).click();
+    const managementDialog = page.getByRole('dialog', {
+      name: '管理類型與分類',
+    });
+    await expect(managementDialog).toBeVisible();
+    await managementDialog.getByLabel('新名稱').fill('緊急預備金');
+    await managementDialog.getByRole('button', { name: '新增' }).click();
+    await expect(
+      managementDialog.getByLabel('緊急預備金名稱'),
+    ).toBeVisible();
+    await managementDialog.getByRole('button', { name: '關閉' }).click();
+
+    await page
+      .getByTestId('item-type')
+      .selectOption({ label: '緊急預備金' });
+    await page.getByTestId('item-amount').fill('30000');
+    await page.getByTestId('save-item').click();
+    await expect(
+      page.getByTestId('asset-group').getByText('緊急預備金', {
+        exact: true,
+      }),
+    ).toBeVisible();
   } finally {
     await application?.close();
     rmSync(userDataDirectory, { recursive: true, force: true });
@@ -181,6 +204,7 @@ async function launchApplication(
     args: [
       applicationEntry,
       `--user-data-dir=${userDataDirectory}`,
+      '--disable-gpu',
     ],
   });
 }

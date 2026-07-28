@@ -51,6 +51,7 @@ describe('SqliteFinancialItemRepository', () => {
 
     expect(repository.findById(item.id)).toEqual(item);
     expect(repository.list()).toEqual([item]);
+    expect(repository.countTransactions(item.id)).toBe(0);
   });
 
   it('updates an existing item', () => {

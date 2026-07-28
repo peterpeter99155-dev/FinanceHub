@@ -32,6 +32,7 @@ export interface FinancialItem {
   readonly name: string;
   readonly direction: FinancialItemDirection;
   readonly type: FinancialItemType;
+  readonly customTypeId?: string;
   readonly amount: TwdAmount;
   readonly status: DataStatus;
   readonly updatedAt: string;
@@ -62,6 +63,16 @@ export function validateFinancialItem(item: FinancialItem): void {
   if (item.amount > MAX_FINANCIAL_ITEM_AMOUNT_TWD) {
     throw new Error(
       'Financial item amount exceeds the supported maximum.',
+    );
+  }
+
+  if (
+    item.customTypeId !== undefined &&
+    item.type !== 'custom_asset' &&
+    item.type !== 'custom_liability'
+  ) {
+    throw new Error(
+      'Only custom financial item types can have a custom type id.',
     );
   }
 

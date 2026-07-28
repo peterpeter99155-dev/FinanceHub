@@ -50,6 +50,7 @@ samples/raw/
 logs/
 tmp/
 temp/
+.codex-temp/
 *.tmp
 
 # OS and editor files
