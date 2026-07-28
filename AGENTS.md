@@ -2,21 +2,26 @@
 
 ## 工作前必讀
 
-開始任何產品或程式修改前，依任務範圍閱讀：
+開始任何產品或程式修改前，依任務範圍閱讀。前兩項每次都必讀，不因任務範圍而略過：
 
-1. `docs/01_Product_Vision.md`
-2. `docs/02_Requirements.md`
-3. `docs/03_Business_Rules.md`
-4. `docs/04_Decision_Log.md`
-5. 當前任務與相關程式碼
+1. `docs/00_Architecture_Rules.md`
+2. `docs/00_Glossary.md`
+3. `docs/01_Product_Vision.md`
+4. `docs/02_Requirements.md`
+5. `docs/03_Business_Rules.md`
+6. `docs/04_Decision_Log.md`
+7. 當前任務與相關程式碼
 
 ## 規格優先順序
 
 1. 已確認的產品願景與商業規則
 2. 已確認的功能需求
-3. 已記錄的技術決策
-4. 當前 Sprint 任務
-5. 程式現況
+3. `docs/00_Architecture_Rules.md` 技術架構規範
+4. 已記錄的技術決策
+5. 當前 Sprint 任務
+6. 程式現況
+
+命名一律以 `docs/00_Glossary.md` 為唯一依據。不得引入該表沒有的概念名稱；需要新概念時先更新該表並取得確認。
 
 若文件彼此矛盾，停止核心邏輯修改並回報，不得自行選擇有利版本。
 
