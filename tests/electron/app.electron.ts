@@ -115,6 +115,7 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
       .locator('..')
       .locator('..');
     await mortgageRow.getByRole('button', { name: '編輯' }).click();
+    await expect(page.getByTestId('item-amount')).toHaveValue('5000000');
     await page.getByTestId('item-amount').fill('4900000');
     await page.getByTestId('save-item').click();
 
@@ -226,6 +227,7 @@ async function createItem(
     await page
       .getByRole('button', { name: '負債', exact: true })
       .click();
+    await expect(page.getByTestId('item-type')).toHaveValue('mortgage');
   }
 
   await page.getByTestId('item-name').fill(input.name);

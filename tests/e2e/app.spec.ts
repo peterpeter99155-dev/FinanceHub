@@ -70,6 +70,9 @@ test('US-06 edits and deletes a transaction, restoring the UI state', async ({
 
   await page.getByRole('button', { name: '編輯 通訊' }).click();
   await expect(page.getByText('編輯中')).toBeVisible();
+  await expect(page.getByTestId('transaction-amount')).toHaveValue(
+    '599',
+  );
   await page.getByTestId('transaction-amount').fill('699');
   await page.getByTestId('save-transaction').click();
   await expect(summaryCard(page, '本月支出')).toContainText(
@@ -110,6 +113,43 @@ test('shows input errors and preserves asset-form focus after deletion', async (
   await expect(page.getByTestId('item-name')).toBeFocused();
 });
 
+test('covers the asset and liability create, edit, and delete flow', async ({
+  page,
+}) => {
+  await expectFinancialSummary(page, '102,000', '0', '102,000');
+
+  await page.getByTestId('item-name').fill('E2E asset');
+  await page.getByTestId('item-type').selectOption('property');
+  await page.getByTestId('item-amount').fill('1000');
+  await page.getByTestId('save-item').click();
+  await expect(page.getByTestId('financial-item-item-1')).toBeVisible();
+  await expectFinancialSummary(page, '103,000', '0', '103,000');
+
+  await page.locator('.segmented-control button').nth(1).click();
+  await expect(page.getByTestId('item-type')).toHaveValue('mortgage');
+  await page.getByTestId('item-name').fill('E2E liability');
+  await page.getByTestId('item-type').selectOption('mortgage');
+  await page.getByTestId('item-amount').fill('50000');
+  await page.getByTestId('save-item').click();
+  const liabilityRow = page.getByTestId('financial-item-item-2');
+  await expect(liabilityRow).toBeVisible();
+  await expectFinancialSummary(page, '103,000', '50,000', '53,000');
+
+  await liabilityRow.getByRole('button').first().click();
+  await expect(page.getByTestId('item-amount')).toHaveValue('50000');
+  await page.getByTestId('item-amount').fill('40000');
+  await page.getByTestId('save-item').click();
+  await expectFinancialSummary(page, '103,000', '40,000', '63,000');
+
+  const assetRow = page.getByTestId('financial-item-item-1');
+  await assetRow.getByRole('button').last().click();
+  const deleteDialog = page.getByRole('alertdialog');
+  await expect(deleteDialog).toBeVisible();
+  await deleteDialog.getByRole('button').last().click();
+  await expect(assetRow).toHaveCount(0);
+  await expectFinancialSummary(page, '102,000', '40,000', '62,000');
+});
+
 async function createExpense(
   page: import('@playwright/test').Page,
   amount: string,
@@ -132,4 +172,21 @@ function summaryCard(
   return page.locator('.transaction-summary-card').filter({
     hasText: label,
   });
+}
+
+async function expectFinancialSummary(
+  page: import('@playwright/test').Page,
+  assets: string,
+  liabilities: string,
+  netWorth: string,
+): Promise<void> {
+  await expect(page.getByTestId('total-assets')).toContainText(
+    `TWD ${assets}`,
+  );
+  await expect(page.getByTestId('total-liabilities')).toContainText(
+    `TWD ${liabilities}`,
+  );
+  await expect(page.getByTestId('net-worth')).toContainText(
+    `TWD ${netWorth}`,
+  );
 }
