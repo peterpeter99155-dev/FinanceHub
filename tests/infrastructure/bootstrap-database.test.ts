@@ -25,7 +25,9 @@ describe('openBootstrapDatabase', () => {
       applied_at: string;
     }[];
 
-    expect(migrations.map(({ version }) => version)).toEqual([1, 2]);
+    expect(migrations.map(({ version }) => version)).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
     for (const migration of migrations) {
       expect(migration.applied_at).toMatch(
         /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
@@ -41,5 +43,28 @@ describe('openBootstrapDatabase', () => {
       .get() as { foreign_keys: number };
 
     expect(foreignKeys.foreign_keys).toBe(1);
+  });
+
+  it('creates transaction tables and indexes', () => {
+    connection = openBootstrapDatabase(':memory:');
+
+    const objects = connection.database
+      .prepare(
+        `SELECT name
+         FROM sqlite_master
+         WHERE name IN (
+           'financial_categories',
+           'financial_transactions',
+           'financial_transactions_month_time_idx'
+         )
+         ORDER BY name`,
+      )
+      .all() as unknown as { name: string }[];
+
+    expect(objects.map(({ name }) => name)).toEqual([
+      'financial_categories',
+      'financial_transactions',
+      'financial_transactions_month_time_idx',
+    ]);
   });
 });

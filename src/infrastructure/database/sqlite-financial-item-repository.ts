@@ -18,6 +18,7 @@ interface FinancialItemRow {
   name: string;
   direction: string;
   type: string;
+  custom_type_id: string | null;
   amount: number;
   status: string;
   updated_at: string;
@@ -33,7 +34,7 @@ export class SqliteFinancialItemRepository
   list(): readonly FinancialItem[] {
     const rows = this.database
       .prepare(
-        `SELECT id, name, direction, type, amount, status, updated_at,
+        `SELECT id, name, direction, type, custom_type_id, amount, status, updated_at,
                 is_active, include_in_net_worth
          FROM financial_items
          ORDER BY updated_at DESC, id ASC`,
@@ -46,7 +47,7 @@ export class SqliteFinancialItemRepository
   findById(id: string): FinancialItem | undefined {
     const row = this.database
       .prepare(
-        `SELECT id, name, direction, type, amount, status, updated_at,
+        `SELECT id, name, direction, type, custom_type_id, amount, status, updated_at,
                 is_active, include_in_net_worth
          FROM financial_items
          WHERE id = ?`,
@@ -56,21 +57,34 @@ export class SqliteFinancialItemRepository
     return row ? mapRow(row) : undefined;
   }
 
+  countTransactions(id: string): number {
+    const row = this.database
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM financial_transactions
+         WHERE source_account_id = ? OR destination_account_id = ?`,
+      )
+      .get(id, id) as { count: number };
+
+    return Number(row.count);
+  }
+
   create(item: FinancialItem): void {
     validateFinancialItem(item);
 
     this.database
       .prepare(
         `INSERT INTO financial_items (
-          id, name, direction, type, amount, status, updated_at,
+          id, name, direction, type, custom_type_id, amount, status, updated_at,
           is_active, include_in_net_worth
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         item.id,
         item.name.trim(),
         item.direction,
         item.type,
+        item.customTypeId ?? null,
         item.amount,
         item.status,
         item.updatedAt,
@@ -85,7 +99,8 @@ export class SqliteFinancialItemRepository
     const result = this.database
       .prepare(
         `UPDATE financial_items
-         SET name = ?, direction = ?, type = ?, amount = ?, status = ?,
+         SET name = ?, direction = ?, type = ?, custom_type_id = ?,
+             amount = ?, status = ?,
              updated_at = ?, is_active = ?, include_in_net_worth = ?
          WHERE id = ?`,
       )
@@ -93,6 +108,7 @@ export class SqliteFinancialItemRepository
         item.name.trim(),
         item.direction,
         item.type,
+        item.customTypeId ?? null,
         item.amount,
         item.status,
         item.updatedAt,
@@ -131,6 +147,9 @@ function mapRow(row: FinancialItemRow): FinancialItem {
     name: row.name,
     direction: direction as FinancialItemDirection,
     type: type as FinancialItemType,
+    ...(row.custom_type_id
+      ? { customTypeId: row.custom_type_id }
+      : {}),
     amount: createTwdAmount(row.amount),
     status: status as DataStatus,
     updatedAt: row.updated_at,
