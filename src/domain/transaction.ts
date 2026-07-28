@@ -1,4 +1,5 @@
 import type { FinancialCategory } from './category';
+import { financialMonthFromDateTime } from './financial-time';
 import type { TwdAmount } from './money';
 import { createTwdAmount } from './money';
 
@@ -131,7 +132,20 @@ export function calculateAccountBalanceEffects(
   options: ValidateTransactionOptions,
 ): readonly AccountBalanceEffect[] {
   validateFinancialTransaction(transaction, options);
+  return computeAccountBalanceEffects(transaction);
+}
 
+export function createTransactionValidationOptions(
+  now: string,
+  accounts: readonly TransactionAccount[],
+  categories: readonly FinancialCategory[],
+): ValidateTransactionOptions {
+  return { now, accounts, categories };
+}
+
+export function computeAccountBalanceEffects(
+  transaction: FinancialTransaction,
+): readonly AccountBalanceEffect[] {
   switch (transaction.kind) {
     case 'income':
       return transaction.destinationAccountId
@@ -183,6 +197,16 @@ export function applyBalanceEffect(
   return createTwdAmount(nextBalance);
 }
 
+export function reverseBalanceEffect(
+  effect: AccountBalanceEffect,
+): AccountBalanceEffect {
+  return {
+    ...effect,
+    operation:
+      effect.operation === 'increase' ? 'decrease' : 'increase',
+  };
+}
+
 export function calculateMonthlyTransactionSummary(
   transactions: readonly FinancialTransaction[],
   year: number,
@@ -198,13 +222,14 @@ export function calculateMonthlyTransactionSummary(
 
   let totalIncome = 0;
   let totalExpense = 0;
+  const expectedMonth = `${year.toString().padStart(4, '0')}-${month
+    .toString()
+    .padStart(2, '0')}`;
 
   for (const transaction of transactions) {
-    const occurredAt = new Date(transaction.occurredAt);
-
     if (
-      occurredAt.getFullYear() !== year ||
-      occurredAt.getMonth() + 1 !== month
+      financialMonthFromDateTime(transaction.occurredAt) !==
+      expectedMonth
     ) {
       continue;
     }

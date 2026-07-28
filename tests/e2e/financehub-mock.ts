@@ -1,16 +1,18 @@
 import type { FinancialCategory } from '../../src/domain/category';
-import type { FinancialItem } from '../../src/domain/financial-item';
+import { systemClock } from '../../src/application/ports/clock';
+import {
+  FinancialItem,
+  toTransactionAccount,
+} from '../../src/domain/financial-item';
 import type { FinancialItemCustomType } from '../../src/domain/financial-item-custom-type';
 import { createTwdAmount } from '../../src/domain/money';
-import type {
-  AccountBalanceEffect,
-  FinancialTransaction,
-  TransactionAccount,
-} from '../../src/domain/transaction';
+import type { FinancialTransaction } from '../../src/domain/transaction';
 import {
   applyBalanceEffect,
   calculateAccountBalanceEffects,
   calculateMonthlyTransactionSummary,
+  createTransactionValidationOptions,
+  reverseBalanceEffect,
 } from '../../src/domain/transaction';
 import type { FinanceHubApi } from '../../src/shared/bootstrap';
 import type { FinancialItemDraft } from '../../src/shared/financial-items';
@@ -236,7 +238,7 @@ function transactionFromDraft(
   id: string,
   draft: TransactionDraft,
 ): FinancialTransaction {
-  const timestamp = new Date().toISOString();
+  const timestamp = systemClock.now();
   const defaultName = state.categories.find(
     (entry) => entry.id === draft.categoryId,
   )?.name;
@@ -270,11 +272,17 @@ function applyTransactionEffects(
   transaction: FinancialTransaction,
   reverse = false,
 ): void {
-  const effects = calculateAccountBalanceEffects(transaction, {
-    now: transaction.updatedAt,
-    accounts: transactionAccounts(state),
-    categories: state.categories,
-  });
+  const effects = calculateAccountBalanceEffects(
+    transaction,
+    createTransactionValidationOptions(
+      systemClock.now(),
+      state.items.flatMap((item) => {
+        const account = toTransactionAccount(item);
+        return account ? [account] : [];
+      }),
+      state.categories,
+    ),
+  );
 
   for (const effect of effects) {
     const appliedEffect = reverse ? reverseBalanceEffect(effect) : effect;
@@ -287,42 +295,6 @@ function applyTransactionEffects(
         : item,
     );
   }
-}
-
-function transactionAccounts(
-  state: MutableState,
-): readonly TransactionAccount[] {
-  return state.items.flatMap((item) => {
-    const kind =
-      item.type === 'bank_deposit'
-        ? 'bank'
-        : item.type === 'cash'
-          ? 'cash'
-          : item.type === 'credit_card'
-            ? 'credit_card'
-            : undefined;
-
-    return kind
-      ? [
-          {
-            id: item.id,
-            kind,
-            balance: item.amount,
-            isActive: item.isActive,
-          },
-        ]
-      : [];
-  });
-}
-
-function reverseBalanceEffect(
-  effect: AccountBalanceEffect,
-): AccountBalanceEffect {
-  return {
-    ...effect,
-    operation:
-      effect.operation === 'increase' ? 'decrease' : 'increase',
-  };
 }
 
 function replaceItem(

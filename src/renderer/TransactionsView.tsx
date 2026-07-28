@@ -8,7 +8,20 @@ import {
 } from 'react';
 
 import type { FinancialCategory } from '../domain/category';
-import type { FinancialItem } from '../domain/financial-item';
+import {
+  FinancialItem,
+  toTransactionAccount,
+} from '../domain/financial-item';
+import {
+  FINANCIAL_TIME_ZONE,
+  financialDateKey,
+  financialDateParts,
+  financialLocalDateTimeInput,
+  financialLocalInputToIso,
+  shiftFinancialMonth,
+  viewedMonthLocalDateTime,
+} from '../domain/financial-time';
+import { systemClock } from '../application/ports/clock';
 import {
   MAX_TRANSACTION_AMOUNT_TWD,
   FinancialTransaction,
@@ -53,16 +66,17 @@ export function TransactionsView({
   onOpenTypeManagement: (section: 'income' | 'expense') => void;
   typeManagementVersion: number;
 }) {
-  const now = useMemo(() => new Date(), []);
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
+  const now = useMemo(() => systemClock.now(), []);
+  const currentMonth = useMemo(() => financialDateParts(now), [now]);
+  const [year, setYear] = useState(currentMonth.year);
+  const [month, setMonth] = useState(currentMonth.month);
   const [snapshot, setSnapshot] =
     useState<TransactionMonthSnapshot | null>(null);
   const [categories, setCategories] = useState<
     readonly FinancialCategory[]
   >([]);
   const [draft, setDraft] = useState<TransactionFormDraft>(() =>
-    emptyDraft(now.getFullYear(), now.getMonth() + 1),
+    emptyDraft(currentMonth.year, currentMonth.month, 'expense', now),
   );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] =
@@ -91,9 +105,10 @@ export function TransactionsView({
   }, [loadMonth, typeManagementVersion]);
 
   const assetAccounts = accounts.filter(
-    (account) =>
-      account.isActive &&
-      (account.type === 'bank_deposit' || account.type === 'cash'),
+    (item) => {
+      const account = toTransactionAccount(item);
+      return account?.isActive && account.kind !== 'credit_card';
+    },
   );
   const activeCategories = categories.filter(
     (category) => category.isActive,
@@ -243,14 +258,14 @@ export function TransactionsView({
   }
 
   function changeMonth(offset: number) {
-    const next = new Date(year, month - 1 + offset, 1);
-    setYear(next.getFullYear());
-    setMonth(next.getMonth() + 1);
-    resetForm(next.getFullYear(), next.getMonth() + 1);
+    const next = shiftFinancialMonth(year, month, offset);
+    setYear(next.year);
+    setMonth(next.month);
+    resetForm(next.year, next.month);
   }
 
   const isCurrentMonth =
-    year === now.getFullYear() && month === now.getMonth() + 1;
+    year === currentMonth.year && month === currentMonth.month;
 
   return (
     <section className="transactions-workspace">
@@ -568,7 +583,7 @@ export function TransactionsView({
             <label>
               交易時間
               <input
-                max={localDateTimeInput(new Date())}
+                max={financialLocalDateTimeInput(systemClock.now())}
                 required
                 type="datetime-local"
                 value={draft.occurredAt}
@@ -854,32 +869,18 @@ function emptyDraft(
   year: number,
   month: number,
   kind: TransactionKind = 'expense',
+  now: string = systemClock.now(),
 ): TransactionFormDraft {
   return {
     kind,
     amount: '',
-    occurredAt: viewedMonthDateTime(year, month),
+    occurredAt: viewedMonthLocalDateTime(year, month, now),
     sourceAccountId: '',
     destinationAccountId: '',
     categoryId: '',
     name: '',
     note: '',
   };
-}
-
-function viewedMonthDateTime(year: number, month: number): string {
-  const now = new Date();
-  const lastDay = new Date(year, month, 0).getDate();
-  const day = Math.min(now.getDate(), lastDay);
-  return localDateTimeInput(
-    new Date(
-      year,
-      month - 1,
-      day,
-      now.getHours(),
-      now.getMinutes(),
-    ),
-  );
 }
 
 function isSimpleKind(kind: TransactionKind): boolean {
@@ -914,7 +915,7 @@ function transactionTone(
 
 interface TransactionDateGroup {
   readonly key: string;
-  readonly date: Date;
+  readonly date: string;
   readonly items: readonly FinancialTransaction[];
   readonly balance: number;
 }
@@ -925,12 +926,7 @@ function groupTransactionsByDate(
   const groups = new Map<string, FinancialTransaction[]>();
 
   for (const transaction of transactions) {
-    const date = new Date(transaction.occurredAt);
-    const key = [
-      date.getFullYear(),
-      String(date.getMonth() + 1).padStart(2, '0'),
-      String(date.getDate()).padStart(2, '0'),
-    ].join('-');
+    const key = financialDateKey(transaction.occurredAt);
     const existing = groups.get(key);
 
     if (existing) {
@@ -942,7 +938,7 @@ function groupTransactionsByDate(
 
   return [...groups.entries()].map(([key, items]) => ({
     key,
-    date: new Date(items[0].occurredAt),
+    date: items[0].occurredAt,
     items,
     balance: calculateDailyBalance(items),
   }));
@@ -1010,7 +1006,7 @@ function toTransactionDraft(
   return {
     kind: draft.kind,
     amount: Number(draft.amount),
-    occurredAt: new Date(draft.occurredAt).toISOString(),
+    occurredAt: financialLocalInputToIso(draft.occurredAt),
     sourceAccountId: draft.sourceAccountId || undefined,
     destinationAccountId: draft.destinationAccountId || undefined,
     categoryId: draft.categoryId || undefined,
@@ -1019,32 +1015,26 @@ function toTransactionDraft(
   };
 }
 
-function localDateTimeInput(date: Date): string {
-  const pad = (value: number) => value.toString().padStart(2, '0');
-
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
-    date.getDate(),
-  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
 function isoToLocalInput(value: string): string {
-  return localDateTimeInput(new Date(value));
+  return financialLocalDateTimeInput(value);
 }
 
-function formatDateHeading(value: Date): string {
+function formatDateHeading(value: string): string {
   return new Intl.DateTimeFormat('zh-TW', {
+    timeZone: FINANCIAL_TIME_ZONE,
     month: 'long',
     day: 'numeric',
     weekday: 'long',
-  }).format(value);
+  }).format(Date.parse(value));
 }
 
 function formatTime(value: string): string {
   return new Intl.DateTimeFormat('zh-TW', {
+    timeZone: FINANCIAL_TIME_ZONE,
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
-  }).format(new Date(value));
+  }).format(Date.parse(value));
 }
 
 function formatTwd(value: number): string {

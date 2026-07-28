@@ -166,6 +166,7 @@ void app.whenReady().then(() => {
   const transactionService = new TransactionService(
     new SqliteTransactionRepository(bootstrapDatabase.database),
     categoryRepository,
+    repository,
   );
 
   registerApplicationHandlers(

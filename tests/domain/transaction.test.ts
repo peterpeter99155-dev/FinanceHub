@@ -8,6 +8,7 @@ import {
   applyBalanceEffect,
   calculateAccountBalanceEffects,
   calculateMonthlyTransactionSummary,
+  computeAccountBalanceEffects,
   validateFinancialTransaction,
 } from '../../src/domain/transaction';
 
@@ -76,6 +77,16 @@ const OPTIONS = {
 };
 
 describe('financial transaction', () => {
+  it('computes effects for an existing transaction without revalidation', () => {
+    expect(computeAccountBalanceEffects(transaction())).toEqual([
+      {
+        accountId: 'bank-1',
+        operation: 'decrease',
+        amount: 599,
+      },
+    ]);
+  });
+
   it('increases an asset account for income', () => {
     const input = transaction({
       kind: 'income',

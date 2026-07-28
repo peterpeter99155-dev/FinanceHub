@@ -1,14 +1,23 @@
 import { randomUUID } from 'node:crypto';
 
 import type { CategoryRepository } from './ports/category-repository';
+import { Clock, systemClock } from './ports/clock';
+import type { FinancialItemRepository } from './ports/financial-item-repository';
 import type { TransactionRepository } from './ports/transaction-repository';
+import { toTransactionAccount } from '../domain/financial-item';
 import {
   MAX_TRANSACTION_AMOUNT_TWD,
   MAX_TRANSACTION_NAME_LENGTH,
   MAX_TRANSACTION_NOTE_LENGTH,
   TRANSACTION_KINDS,
+  AccountBalanceEffect,
   FinancialTransaction,
   TransactionKind,
+  applyBalanceEffect,
+  calculateAccountBalanceEffects,
+  computeAccountBalanceEffects,
+  createTransactionValidationOptions,
+  reverseBalanceEffect,
 } from '../domain/transaction';
 import { createTwdAmount } from '../domain/money';
 import type {
@@ -22,8 +31,9 @@ export class TransactionService {
   constructor(
     private readonly repository: TransactionRepository,
     private readonly categories: CategoryRepository,
+    private readonly financialItems: FinancialItemRepository,
     private readonly createId: () => string = randomUUID,
-    private readonly now: () => string = () => new Date().toISOString(),
+    private readonly clock: Clock = systemClock,
   ) {}
 
   listMonth(
@@ -53,7 +63,7 @@ export class TransactionService {
     yearInput: unknown,
     monthInput: unknown,
   ): TransactionMonthSnapshot {
-    const now = this.now();
+    const now = this.clock.now();
     const draft = this.parseDraft(input);
     const transaction: FinancialTransaction = {
       id: this.createId(),
@@ -63,7 +73,16 @@ export class TransactionService {
       updatedAt: now,
     };
 
-    this.repository.create(transaction);
+    this.repository.runInTransaction(() => {
+      this.applyEffects(
+        calculateAccountBalanceEffects(
+          transaction,
+          this.validationOptions(transaction, now),
+        ),
+        now,
+      );
+      this.repository.create(transaction);
+    });
     return this.listMonth(yearInput, monthInput);
   }
 
@@ -81,11 +100,27 @@ export class TransactionService {
     }
 
     const draft = this.parseDraft(input);
-    this.repository.update({
+    const now = this.clock.now();
+    const replacement: FinancialTransaction = {
       ...existing,
       ...draft,
       amount: createTwdAmount(draft.amount),
-      updatedAt: this.now(),
+      updatedAt: now,
+    };
+
+    this.repository.runInTransaction(() => {
+      this.applyEffects(
+        computeAccountBalanceEffects(existing).map(reverseBalanceEffect),
+        now,
+      );
+      this.applyEffects(
+        calculateAccountBalanceEffects(
+          replacement,
+          this.validationOptions(replacement, now),
+        ),
+        now,
+      );
+      this.repository.update(replacement);
     });
     return this.listMonth(yearInput, monthInput);
   }
@@ -95,7 +130,22 @@ export class TransactionService {
     yearInput: unknown,
     monthInput: unknown,
   ): TransactionMonthSnapshot {
-    this.repository.delete(parseId(idInput), this.now());
+    const id = parseId(idInput);
+    const now = this.clock.now();
+
+    this.repository.runInTransaction(() => {
+      const existing = this.repository.findById(id);
+
+      if (!existing) {
+        throw new Error(`Financial transaction "${id}" was not found.`);
+      }
+
+      this.applyEffects(
+        computeAccountBalanceEffects(existing).map(reverseBalanceEffect),
+        now,
+      );
+      this.repository.delete(id);
+    });
     return this.listMonth(yearInput, monthInput);
   }
 
@@ -142,6 +192,66 @@ export class TransactionService {
       name,
       note,
     };
+  }
+
+  private validationOptions(
+    transaction: FinancialTransaction,
+    now: string,
+  ) {
+    const accountIds = [
+      transaction.sourceAccountId,
+      transaction.destinationAccountId,
+    ].filter((id): id is string => id !== undefined);
+    const accounts = accountIds.map((id) => {
+      const item = this.financialItems.findById(id);
+      const account = item && toTransactionAccount(item);
+
+      if (!account) {
+        throw new Error(`Transaction account "${id}" was not found.`);
+      }
+
+      return account;
+    });
+    const categories = transaction.categoryId
+      ? [this.requireCategory(transaction.categoryId)]
+      : [];
+
+    return createTransactionValidationOptions(
+      now,
+      accounts,
+      categories,
+    );
+  }
+
+  private requireCategory(id: string) {
+    const category = this.categories.findById(id);
+
+    if (!category) {
+      throw new Error(`Transaction category "${id}" was not found.`);
+    }
+
+    return category;
+  }
+
+  private applyEffects(
+    effects: readonly AccountBalanceEffect[],
+    updatedAt: string,
+  ): void {
+    for (const effect of effects) {
+      const item = this.financialItems.findById(effect.accountId);
+
+      if (!item) {
+        throw new Error(
+          `Transaction account "${effect.accountId}" was not found.`,
+        );
+      }
+
+      this.financialItems.update({
+        ...item,
+        amount: applyBalanceEffect(item.amount, effect),
+        updatedAt,
+      });
+    }
   }
 
   private defaultName(

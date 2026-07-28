@@ -9,6 +9,7 @@ export interface TransactionPage {
 }
 
 export interface TransactionRepository {
+  runInTransaction<T>(operation: () => T): T;
   findById(id: string): FinancialTransaction | undefined;
   listByMonth(
     year: number,
@@ -22,5 +23,5 @@ export interface TransactionRepository {
   ): MonthlyTransactionSummary;
   create(transaction: FinancialTransaction): void;
   update(transaction: FinancialTransaction): void;
-  delete(id: string, updatedAt: string): void;
+  delete(id: string): void;
 }

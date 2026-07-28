@@ -80,11 +80,11 @@ describe('SqliteTransactionRepository', () => {
     connection.close();
   });
 
-  it('creates an expense and updates its account atomically', () => {
+  it('persists an expense without owning account-balance rules', () => {
     transactions.create(transaction());
 
     expect(transactions.findById('expense-1')).toEqual(transaction());
-    expect(items.findById('bank-1')?.amount).toBe(99_401);
+    expect(items.findById('bank-1')?.amount).toBe(100_000);
     expect(transactions.summarizeMonth(2026, 7)).toEqual({
       totalIncome: 0,
       totalExpense: 599,
@@ -113,8 +113,8 @@ describe('SqliteTransactionRepository', () => {
       }),
     );
 
-    expect(items.findById('bank-1')?.amount).toBe(145_000);
-    expect(items.findById('cash-1')?.amount).toBe(7_000);
+    expect(items.findById('bank-1')?.amount).toBe(100_000);
+    expect(items.findById('cash-1')?.amount).toBe(2_000);
     expect(transactions.summarizeMonth(2026, 7)).toEqual({
       totalIncome: 50_000,
       totalExpense: 0,
@@ -142,7 +142,7 @@ describe('SqliteTransactionRepository', () => {
       }),
     );
 
-    expect(items.findById('bank-1')?.amount).toBe(99_000);
+    expect(items.findById('bank-1')?.amount).toBe(100_000);
     expect(items.findById('card-1')?.amount).toBe(0);
     expect(transactions.summarizeMonth(2026, 7)).toEqual({
       totalIncome: 0,
@@ -151,7 +151,7 @@ describe('SqliteTransactionRepository', () => {
     });
   });
 
-  it('reverses old effects when updating or deleting a transaction', () => {
+  it('updates and deletes transaction records', () => {
     transactions.create(transaction());
     const updated = transaction({
       amount: createTwdAmount(699),
@@ -159,23 +159,39 @@ describe('SqliteTransactionRepository', () => {
     });
 
     transactions.update(updated);
-    expect(items.findById('bank-1')?.amount).toBe(99_301);
+    expect(items.findById('bank-1')?.amount).toBe(100_000);
     expect(transactions.summarizeMonth(2026, 7).totalExpense).toBe(699);
 
-    transactions.delete(
-      'expense-1',
-      '2026-07-28T09:00:00.000Z',
-    );
+    transactions.delete('expense-1');
     expect(items.findById('bank-1')?.amount).toBe(100_000);
     expect(transactions.findById('expense-1')).toBeUndefined();
   });
 
-  it('rolls back all changes when a transaction cannot be completed', () => {
+  it('deletes an existing transaction after its account and category become inactive', () => {
+    transactions.create(transaction());
+    connection.database.exec(
+      `UPDATE financial_items SET is_active = 0 WHERE id = 'bank-1';
+       UPDATE financial_categories
+       SET is_active = 0
+       WHERE id = 'expense-communication';`,
+    );
+
+    transactions.delete('expense-1');
+
+    expect(items.findById('bank-1')?.amount).toBe(100_000);
+    expect(transactions.findById('expense-1')).toBeUndefined();
+  });
+
+  it('rolls back all adapter writes when a unit of work fails', () => {
     expect(() =>
-      transactions.create(
-        transaction({ amount: createTwdAmount(100_001) }),
-      ),
-    ).toThrow('negative');
+      transactions.runInTransaction(() => {
+        transactions.create(transaction());
+        items.update(
+          item({ amount: createTwdAmount(99_401) }),
+        );
+        throw new Error('simulated failure');
+      }),
+    ).toThrow('simulated failure');
 
     expect(items.findById('bank-1')?.amount).toBe(100_000);
     expect(transactions.findById('expense-1')).toBeUndefined();
