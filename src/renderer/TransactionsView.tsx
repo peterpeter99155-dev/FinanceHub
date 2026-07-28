@@ -516,6 +516,7 @@ export function TransactionsView({
                   </button>
                 </span>
                 <select
+                  data-testid="transaction-category"
                   required
                   value={draft.categoryId}
                   onChange={(event) =>

@@ -52,9 +52,13 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     );
     await page.getByTestId('advanced-settings').locator('summary').click();
     await expect(page.getByText('列入我的資產')).toBeVisible();
-    await page.getByRole('button', { name: '負債' }).click();
+    await page
+      .getByRole('button', { name: '負債', exact: true })
+      .click();
     await expect(page.getByText('列入我的負債')).toBeVisible();
-    await page.getByRole('button', { name: '資產' }).click();
+    await page
+      .getByRole('button', { name: '資產', exact: true })
+      .click();
     await page.getByTestId('advanced-settings').locator('summary').click();
     await page.getByTestId('item-amount').fill('0');
     await expect(page.getByTestId('save-item')).toBeDisabled();
@@ -168,7 +172,7 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
       }),
     ).toBeVisible();
 
-    await page.getByRole('button', { name: '＋新增類型' }).click();
+    await page.locator('.form-panel .inline-action').click();
     const managementDialog = page.getByRole('dialog', {
       name: '管理類型與分類',
     });
@@ -219,7 +223,9 @@ async function createItem(
   },
 ): Promise<void> {
   if (input.direction === '負債') {
-    await page.getByRole('button', { name: '負債' }).click();
+    await page
+      .getByRole('button', { name: '負債', exact: true })
+      .click();
   }
 
   await page.getByTestId('item-name').fill(input.name);

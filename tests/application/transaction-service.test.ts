@@ -111,7 +111,27 @@ describe('TransactionService', () => {
     expect(items.findById('bank-1')?.amount).toBe(100_000);
   });
 
-  it('creates income, transfer, card purchase and card payment with correct totals', () => {
+  it('US-04 records a transfer fee as an ordinary expense', () => {
+    const snapshot = service.create(
+      expenseDraft({
+        amount: 15,
+        categoryId: 'expense-other',
+        name: '轉帳手續費',
+      }),
+      2026,
+      7,
+    );
+
+    expect(snapshot.items[0]).toMatchObject({
+      kind: 'expense',
+      name: '轉帳手續費',
+      amount: 15,
+    });
+    expect(snapshot.summary.totalExpense).toBe(15);
+    expect(items.findById('bank-1')?.amount).toBe(99_985);
+  });
+
+  it('US-01, US-03 and US-05 apply income, transfer and credit card effects', () => {
     let sequence = 0;
     service = new TransactionService(
       new SqliteTransactionRepository(connection.database),
@@ -172,7 +192,7 @@ describe('TransactionService', () => {
     expect(items.findById('card-1')?.amount).toBe(0);
   });
 
-  it('updates and deletes a transaction while restoring balances', () => {
+  it('US-06 updates and deletes a transaction while restoring balances', () => {
     service.create(expenseDraft(), 2026, 7);
 
     service.update(

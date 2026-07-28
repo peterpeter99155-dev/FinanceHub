@@ -11,7 +11,10 @@
     "make": "electron-forge make",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "playwright test",
+    "test:e2e:build": "webpack --config tests/e2e/webpack.config.cjs",
+    "test:e2e": "npm run test:e2e:build && playwright test",
+    "test:electron": "playwright test --config playwright.electron.config.ts",
+    "test:package-smoke": "npm run package && node tests/smoke/package-smoke.cjs",
     "test:watch": "vitest",
     "lint": "eslint ."
   },
