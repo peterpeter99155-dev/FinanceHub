@@ -40,7 +40,7 @@
     "@typescript-eslint/parser": "8.53.1",
     "@vercel/webpack-asset-relocator-loader": "1.7.3",
     "css-loader": "7.1.2",
-    "electron": "43.2.0",
+    "electron": "42.7.1",
     "eslint": "9.39.2",
     "eslint-plugin-react-hooks": "7.0.1",
     "node-loader": "2.1.0",
