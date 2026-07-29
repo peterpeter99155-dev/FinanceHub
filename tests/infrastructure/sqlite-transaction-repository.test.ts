@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FinancialItem } from '../../src/domain/financial-item';
 import { createTwdAmount } from '../../src/domain/money';
 import type { FinancialTransaction } from '../../src/domain/transaction';
+import { calculateMonthlyTransactionSummary } from '../../src/domain/transaction';
 import {
   BootstrapDatabase,
   openBootstrapDatabase,
@@ -47,6 +48,13 @@ function transaction(
   };
 }
 
+function persist(
+  repository: SqliteTransactionRepository,
+  value: FinancialTransaction,
+): void {
+  repository.create(value, value.occurredAt.slice(0, 7));
+}
+
 describe('SqliteTransactionRepository', () => {
   let connection: BootstrapDatabase;
   let items: SqliteFinancialItemRepository;
@@ -81,11 +89,11 @@ describe('SqliteTransactionRepository', () => {
   });
 
   it('persists an expense without owning account-balance rules', () => {
-    transactions.create(transaction());
+    persist(transactions, transaction());
 
     expect(transactions.findById('expense-1')).toEqual(transaction());
     expect(items.findById('bank-1')?.amount).toBe(100_000);
-    expect(transactions.summarizeMonth(2026, 7)).toEqual({
+    expect(summary(transactions, 2026, 7)).toEqual({
       totalIncome: 0,
       totalExpense: 599,
       balance: -599,
@@ -93,7 +101,8 @@ describe('SqliteTransactionRepository', () => {
   });
 
   it('creates income and transfers without counting transfers as income or expense', () => {
-    transactions.create(
+    persist(
+      transactions,
       transaction({
         id: 'income-1',
         kind: 'income',
@@ -103,7 +112,8 @@ describe('SqliteTransactionRepository', () => {
         categoryId: 'income-salary',
       }),
     );
-    transactions.create(
+    persist(
+      transactions,
       transaction({
         id: 'transfer-1',
         kind: 'transfer',
@@ -115,7 +125,7 @@ describe('SqliteTransactionRepository', () => {
 
     expect(items.findById('bank-1')?.amount).toBe(100_000);
     expect(items.findById('cash-1')?.amount).toBe(2_000);
-    expect(transactions.summarizeMonth(2026, 7)).toEqual({
+    expect(summary(transactions, 2026, 7)).toEqual({
       totalIncome: 50_000,
       totalExpense: 0,
       balance: 50_000,
@@ -123,7 +133,8 @@ describe('SqliteTransactionRepository', () => {
   });
 
   it('records card purchases and payments without double-counting expense', () => {
-    transactions.create(
+    persist(
+      transactions,
       transaction({
         id: 'card-purchase-1',
         kind: 'credit_card_purchase',
@@ -132,7 +143,8 @@ describe('SqliteTransactionRepository', () => {
         destinationAccountId: 'card-1',
       }),
     );
-    transactions.create(
+    persist(
+      transactions,
       transaction({
         id: 'card-payment-1',
         kind: 'credit_card_payment',
@@ -144,7 +156,7 @@ describe('SqliteTransactionRepository', () => {
 
     expect(items.findById('bank-1')?.amount).toBe(100_000);
     expect(items.findById('card-1')?.amount).toBe(0);
-    expect(transactions.summarizeMonth(2026, 7)).toEqual({
+    expect(summary(transactions, 2026, 7)).toEqual({
       totalIncome: 0,
       totalExpense: 1_000,
       balance: -1_000,
@@ -152,15 +164,15 @@ describe('SqliteTransactionRepository', () => {
   });
 
   it('updates and deletes transaction records', () => {
-    transactions.create(transaction());
+    persist(transactions, transaction());
     const updated = transaction({
       amount: createTwdAmount(699),
       updatedAt: '2026-07-28T08:30:00.000Z',
     });
 
-    transactions.update(updated);
+    transactions.update(updated, '2026-07');
     expect(items.findById('bank-1')?.amount).toBe(100_000);
-    expect(transactions.summarizeMonth(2026, 7).totalExpense).toBe(699);
+    expect(summary(transactions, 2026, 7).totalExpense).toBe(699);
 
     transactions.delete('expense-1');
     expect(items.findById('bank-1')?.amount).toBe(100_000);
@@ -168,7 +180,7 @@ describe('SqliteTransactionRepository', () => {
   });
 
   it('deletes an existing transaction after its account and category become inactive', () => {
-    transactions.create(transaction());
+    persist(transactions, transaction());
     connection.database.exec(
       `UPDATE financial_items SET is_active = 0 WHERE id = 'bank-1';
        UPDATE financial_categories
@@ -185,7 +197,7 @@ describe('SqliteTransactionRepository', () => {
   it('rolls back all adapter writes when a unit of work fails', () => {
     expect(() =>
       transactions.runInTransaction(() => {
-        transactions.create(transaction());
+        persist(transactions, transaction());
         items.update(
           item({ amount: createTwdAmount(99_401) }),
         );
@@ -198,14 +210,16 @@ describe('SqliteTransactionRepository', () => {
   });
 
   it('lists one month in pages and preserves all historical months', () => {
-    transactions.create(transaction());
-    transactions.create(
+    persist(transactions, transaction());
+    persist(
+      transactions,
       transaction({
         id: 'expense-2',
         occurredAt: '2026-07-27T07:30:00.000Z',
       }),
     );
-    transactions.create(
+    persist(
+      transactions,
       transaction({
         id: 'june-expense',
         occurredAt: '2026-06-30T07:30:00.000Z',
@@ -226,10 +240,22 @@ describe('SqliteTransactionRepository', () => {
   it('keeps Sprint 01 balances as opening balances without creating income', () => {
     expect(items.findById('bank-1')?.amount).toBe(100_000);
     expect(transactions.listByMonth(2026, 7).totalCount).toBe(0);
-    expect(transactions.summarizeMonth(2026, 7)).toEqual({
+    expect(summary(transactions, 2026, 7)).toEqual({
       totalIncome: 0,
       totalExpense: 0,
       balance: 0,
     });
   });
 });
+
+function summary(
+  transactions: SqliteTransactionRepository,
+  year: number,
+  month: number,
+) {
+  return calculateMonthlyTransactionSummary(
+    transactions.listAllByMonth(year, month),
+    year,
+    month,
+  );
+}

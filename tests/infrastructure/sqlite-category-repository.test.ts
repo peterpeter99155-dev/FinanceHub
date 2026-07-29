@@ -61,7 +61,7 @@ describe('SqliteCategoryRepository', () => {
           name: ' 飲食 ',
         }),
       ),
-    ).toThrow('same name');
+    ).toThrow();
 
     expect(() =>
       repository.create(

@@ -4,14 +4,11 @@ import type {
   TransactionPage,
   TransactionRepository,
 } from '../../application/ports/transaction-repository';
-import { financialMonthFromDateTime } from '../../domain/financial-time';
 import { createTwdAmount } from '../../domain/money';
 import {
   TRANSACTION_KINDS,
   FinancialTransaction,
-  MonthlyTransactionSummary,
   TransactionKind,
-  calculateMonthlyTransactionSummary,
 } from '../../domain/transaction';
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -93,10 +90,10 @@ export class SqliteTransactionRepository
     };
   }
 
-  summarizeMonth(
+  listAllByMonth(
     year: number,
     month: number,
-  ): MonthlyTransactionSummary {
+  ): readonly FinancialTransaction[] {
     const financialMonth = formatFinancialMonth(year, month);
     const rows = this.database
       .prepare(
@@ -106,15 +103,14 @@ export class SqliteTransactionRepository
       )
       .all(financialMonth) as unknown as TransactionRow[];
 
-    return calculateMonthlyTransactionSummary(
-      rows.map(mapTransactionRow),
-      year,
-      month,
-    );
+    return rows.map(mapTransactionRow);
   }
 
-  create(transaction: FinancialTransaction): void {
-    this.insert(transaction);
+  create(
+    transaction: FinancialTransaction,
+    financialMonth: string,
+  ): void {
+    this.insert(transaction, financialMonth);
   }
 
   countByCategoryId(id: string): number {
@@ -151,7 +147,10 @@ export class SqliteTransactionRepository
       .run(replacementId, id);
   }
 
-  update(transaction: FinancialTransaction): void {
+  update(
+    transaction: FinancialTransaction,
+    financialMonth: string,
+  ): void {
     const result = this.database
         .prepare(
           `UPDATE financial_transactions
@@ -165,7 +164,7 @@ export class SqliteTransactionRepository
           transaction.kind,
           transaction.amount,
           transaction.occurredAt,
-          financialMonthFromDateTime(transaction.occurredAt),
+          financialMonth,
           transaction.sourceAccountId ?? null,
           transaction.destinationAccountId ?? null,
           transaction.categoryId ?? null,
@@ -192,7 +191,10 @@ export class SqliteTransactionRepository
     }
   }
 
-  private insert(transaction: FinancialTransaction): void {
+  private insert(
+    transaction: FinancialTransaction,
+    financialMonth: string,
+  ): void {
     this.database
       .prepare(
         `INSERT INTO financial_transactions (
@@ -206,7 +208,7 @@ export class SqliteTransactionRepository
         transaction.kind,
         transaction.amount,
         transaction.occurredAt,
-        financialMonthFromDateTime(transaction.occurredAt),
+        financialMonth,
         transaction.sourceAccountId ?? null,
         transaction.destinationAccountId ?? null,
         transaction.categoryId ?? null,

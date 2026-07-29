@@ -5,8 +5,6 @@ import {
   CATEGORY_KINDS,
   CategoryKind,
   FinancialCategory,
-  assertUniqueActiveCategoryName,
-  validateFinancialCategory,
 } from '../../domain/category';
 
 interface CategoryRow {
@@ -45,9 +43,6 @@ export class SqliteCategoryRepository implements CategoryRepository {
   }
 
   create(category: FinancialCategory): void {
-    validateFinancialCategory(category);
-    assertUniqueActiveCategoryName(this.list(), category);
-
     this.database
       .prepare(
         `INSERT INTO financial_categories (
@@ -64,8 +59,6 @@ export class SqliteCategoryRepository implements CategoryRepository {
   }
 
   update(category: FinancialCategory): void {
-    validateFinancialCategory(category);
-    assertUniqueActiveCategoryName(this.list(), category);
     const existing = this.findById(category.id);
 
     if (!existing) {
@@ -126,7 +119,6 @@ function mapRow(row: CategoryRow): FinancialCategory {
     isActive: row.is_active === 1,
   };
 
-  validateFinancialCategory(category);
   return category;
 }
 
