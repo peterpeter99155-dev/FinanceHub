@@ -1,4 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite';
+import {
+  ERROR_CODES,
+  FinanceHubError,
+} from '../../shared/errors';
 
 import type { FinancialItemCustomTypeRepository } from '../../application/ports/financial-item-custom-type-repository';
 import {
@@ -120,7 +124,8 @@ export class SqliteFinancialItemCustomTypeRepository
     );
 
     if (duplicate) {
-      throw new Error(
+      throw new FinanceHubError(
+        ERROR_CODES.duplicateName,
         'An active custom type with the same name and direction already exists.',
       );
     }

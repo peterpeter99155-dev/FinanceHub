@@ -25,6 +25,10 @@ import type {
   FinancialItemSnapshot,
 } from '../shared/financial-items';
 import { FINANCIAL_ITEM_TYPE_LABELS } from '../shared/financial-item-labels';
+import {
+  ERROR_CODES,
+  errorCodeOf,
+} from '../shared/errors';
 import { TransactionsView } from './TransactionsView';
 import { IconButton } from './IconButton';
 import { MoneyAmount } from './MoneyAmount';
@@ -1345,19 +1349,12 @@ function formatUpdatedAt(value: string): string {
 }
 
 function getErrorMessage(error: unknown): string {
-  if (!(error instanceof Error)) {
-    return '操作失敗，請稍後再試。';
-  }
-
-  if (error.message.includes('greater than zero')) {
+  const code = errorCodeOf(error);
+  if (code === ERROR_CODES.amountMustBePositive) {
     return '金額必須大於 0。';
   }
 
-  if (
-    error.message.includes('allowed maximum') ||
-    error.message.includes('supported maximum') ||
-    error.message.includes('safe integer')
-  ) {
+  if (code === ERROR_CODES.amountOutOfRange) {
     return `單筆金額上限為 ${formatTwd(
       MAX_FINANCIAL_ITEM_AMOUNT_TWD,
     )}。`;
@@ -1384,25 +1381,17 @@ function managementErrorMessage(
   error: unknown,
   subject: '類型' | '分類',
 ): string {
-  if (!(error instanceof Error)) {
-    return '操作失敗，請確認輸入內容後再試。';
-  }
+  const code = errorCodeOf(error);
 
-  if (
-    error.message.includes('same name') ||
-    error.message.includes('UNIQUE constraint')
-  ) {
+  if (code === ERROR_CODES.duplicateName) {
     return '已有相同名稱，請使用其他名稱。';
   }
 
-  if (error.message.includes('Built-in')) {
+  if (code === ERROR_CODES.builtInImmutable) {
     return `系統預設${subject}不能修改或刪除。`;
   }
 
-  if (
-    error.message.includes('used custom type') ||
-    error.message.includes('used by')
-  ) {
+  if (code === ERROR_CODES.resourceInUse) {
     return subject === '類型'
       ? '這個類型已有資產或負債使用，不能停用或刪除。'
       : '這個分類已被交易使用，不能直接刪除。';

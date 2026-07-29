@@ -1,4 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import {
+  ERROR_CODES,
+  FinanceHubError,
+} from '../shared/errors';
 
 import type { FinancialItemCustomType } from '../domain/financial-item-custom-type';
 import {
@@ -46,12 +50,16 @@ export class FinancialItemCustomTypeService {
     const usageCount = this.financialItems.countByCustomTypeId(id);
 
     if (existing.direction !== draft.direction && usageCount > 0) {
-      throw new Error(
+      throw new FinanceHubError(
+        ERROR_CODES.resourceInUse,
         'A used custom type cannot change between asset and liability.',
       );
     }
     if (existing.isActive && !draft.isActive && usageCount > 0) {
-      throw new Error('A used custom type cannot be deactivated.');
+      throw new FinanceHubError(
+        ERROR_CODES.resourceInUse,
+        'A used custom type cannot be deactivated.',
+      );
     }
 
     this.repository.update({
@@ -66,8 +74,10 @@ export class FinancialItemCustomTypeService {
     const usageCount = this.financialItems.countByCustomTypeId(id);
 
     if (usageCount > 0) {
-      throw new Error(
+      throw new FinanceHubError(
+        ERROR_CODES.resourceInUse,
         `Financial item custom type is used by ${usageCount} item(s).`,
+        { usageCount },
       );
     }
 

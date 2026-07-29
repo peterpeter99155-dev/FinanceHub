@@ -1,4 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import {
+  ERROR_CODES,
+  FinanceHubError,
+} from '../shared/errors';
 
 import {
   CATEGORY_KINDS,
@@ -39,7 +43,10 @@ export class CategoryService {
       throw new Error(`Financial category "${id}" was not found.`);
     }
     if (existing.isBuiltIn) {
-      throw new Error('Built-in financial categories cannot be modified.');
+      throw new FinanceHubError(
+        ERROR_CODES.builtInImmutable,
+        'Built-in financial categories cannot be modified.',
+      );
     }
 
     const draft = parseDraft(input);
@@ -66,7 +73,10 @@ export class CategoryService {
       throw new Error(`Financial category "${id}" was not found.`);
     }
     if (existing.isBuiltIn) {
-      throw new Error('Built-in financial categories cannot be deleted.');
+      throw new FinanceHubError(
+        ERROR_CODES.builtInImmutable,
+        'Built-in financial categories cannot be deleted.',
+      );
     }
 
     const policy = getCategoryRemovalPolicy(
@@ -74,8 +84,10 @@ export class CategoryService {
     );
 
     if (policy.action === 'reassign_required') {
-      throw new Error(
+      throw new FinanceHubError(
+        ERROR_CODES.resourceInUse,
         `Financial category is used by ${policy.usageCount} transaction(s).`,
+        { usageCount: policy.usageCount },
       );
     }
 
@@ -99,7 +111,10 @@ export class CategoryService {
       throw new Error(`Financial category "${id}" was not found.`);
     }
     if (source.isBuiltIn) {
-      throw new Error('Built-in financial categories cannot be deleted.');
+      throw new FinanceHubError(
+        ERROR_CODES.builtInImmutable,
+        'Built-in financial categories cannot be deleted.',
+      );
     }
     if (!replacement || !replacement.isActive) {
       throw new Error('Replacement category must be active.');

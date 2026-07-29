@@ -1,4 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import {
+  ERROR_CODES,
+  FinanceHubError,
+} from '../shared/errors';
 
 import type { CategoryRepository } from './ports/category-repository';
 import { Clock, systemClock } from './ports/clock';
@@ -207,7 +211,10 @@ export class TransactionService {
       const account = item && toTransactionAccount(item);
 
       if (!account) {
-        throw new Error(`Transaction account "${id}" was not found.`);
+        throw new FinanceHubError(
+          ERROR_CODES.invalidAccount,
+          `Transaction account "${id}" was not found.`,
+        );
       }
 
       return account;
@@ -227,7 +234,10 @@ export class TransactionService {
     const category = this.categories.findById(id);
 
     if (!category) {
-      throw new Error(`Transaction category "${id}" was not found.`);
+      throw new FinanceHubError(
+        ERROR_CODES.invalidCategory,
+        `Transaction category "${id}" was not found.`,
+      );
     }
 
     return category;

@@ -2,6 +2,10 @@ import type { FinancialCategory } from './category';
 import { financialMonthFromDateTime } from './financial-time';
 import type { TwdAmount } from './money';
 import { createTwdAmount } from './money';
+import {
+  ERROR_CODES,
+  FinanceHubError,
+} from '../shared/errors';
 
 export const MAX_TRANSACTION_AMOUNT_TWD = 999_999_999_999;
 export const MAX_TRANSACTION_NAME_LENGTH = 50;
@@ -191,7 +195,10 @@ export function applyBalanceEffect(
   }
 
   if (nextBalance < 0) {
-    throw new Error('Account balance cannot become negative.');
+    throw new FinanceHubError(
+      ERROR_CODES.negativeAccountBalance,
+      'Account balance cannot become negative.',
+    );
   }
 
   return createTwdAmount(nextBalance);
@@ -331,7 +338,10 @@ function validateCommonFields(
   parseDateTime(transaction.updatedAt, 'updatedAt');
 
   if (occurredAt.getTime() > currentTime.getTime()) {
-    throw new Error('Transaction occurredAt cannot be in the future.');
+    throw new FinanceHubError(
+      ERROR_CODES.futureTransaction,
+      'Transaction occurredAt cannot be in the future.',
+    );
   }
 }
 
@@ -346,11 +356,17 @@ function findAccount(
   const account = accounts.find((candidate) => candidate.id === id);
 
   if (!account) {
-    throw new Error(`Transaction account "${id}" was not found.`);
+    throw new FinanceHubError(
+      ERROR_CODES.invalidAccount,
+      `Transaction account "${id}" was not found.`,
+    );
   }
 
   if (!account.isActive) {
-    throw new Error(`Transaction account "${id}" is inactive.`);
+    throw new FinanceHubError(
+      ERROR_CODES.invalidAccount,
+      `Transaction account "${id}" is inactive.`,
+    );
   }
 
   return account;
@@ -367,11 +383,17 @@ function findCategory(
   const category = categories.find((candidate) => candidate.id === id);
 
   if (!category) {
-    throw new Error(`Transaction category "${id}" was not found.`);
+    throw new FinanceHubError(
+      ERROR_CODES.invalidCategory,
+      `Transaction category "${id}" was not found.`,
+    );
   }
 
   if (!category.isActive) {
-    throw new Error(`Transaction category "${id}" is inactive.`);
+    throw new FinanceHubError(
+      ERROR_CODES.invalidCategory,
+      `Transaction category "${id}" is inactive.`,
+    );
   }
 
   return category;
@@ -382,7 +404,10 @@ function assertAssetAccount(
   field: string,
 ): asserts account is TransactionAccount {
   if (!account || account.kind === 'credit_card') {
-    throw new Error(`${field} must be an active asset account.`);
+    throw new FinanceHubError(
+      ERROR_CODES.invalidAccount,
+      `${field} must be an active asset account.`,
+    );
   }
 }
 
@@ -391,7 +416,10 @@ function assertCreditCard(
   field: string,
 ): asserts account is TransactionAccount {
   if (!account || account.kind !== 'credit_card') {
-    throw new Error(`${field} must be an active credit card account.`);
+    throw new FinanceHubError(
+      ERROR_CODES.invalidAccount,
+      `${field} must be an active credit card account.`,
+    );
   }
 }
 
@@ -409,7 +437,10 @@ function assertCategory(
   kind: FinancialCategory['kind'],
 ): asserts category is FinancialCategory {
   if (!category || category.kind !== kind) {
-    throw new Error(`Transaction requires an active ${kind} category.`);
+    throw new FinanceHubError(
+      ERROR_CODES.invalidCategory,
+      `Transaction requires an active ${kind} category.`,
+    );
   }
 }
 

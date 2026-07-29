@@ -1,4 +1,9 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  type IpcMainInvokeEvent,
+} from 'electron';
 import path from 'node:path';
 
 import { FinancialItemService } from './application/financial-item-service';
@@ -14,6 +19,7 @@ import {
   BootstrapStatus,
   IPC_CHANNELS,
 } from './shared/bootstrap';
+import { toIpcResult } from './shared/ipc-result';
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
@@ -27,7 +33,17 @@ function registerApplicationHandlers(
   customTypeService: FinancialItemCustomTypeService,
   transactionService: TransactionService,
 ): void {
-  ipcMain.handle(
+  type IpcOperation = (
+    event: IpcMainInvokeEvent,
+    ...args: unknown[]
+  ) => unknown;
+  const handle = (channel: string, operation: IpcOperation): void => {
+    ipcMain.handle(channel, (event, ...args: unknown[]) =>
+      toIpcResult(() => operation(event, ...args)),
+    );
+  };
+
+  handle(
     IPC_CHANNELS.getBootstrapStatus,
     (): BootstrapStatus => ({
       appName: 'FinanceHub',
@@ -35,70 +51,70 @@ function registerApplicationHandlers(
       storagePolicy: 'sample-data-only',
     }),
   );
-  ipcMain.handle(IPC_CHANNELS.listFinancialItems, () =>
+  handle(IPC_CHANNELS.listFinancialItems, () =>
     financialItemService.list(),
   );
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.createFinancialItem,
     (_event, draft: unknown) => financialItemService.create(draft),
   );
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.updateFinancialItem,
     (_event, id: unknown, draft: unknown) =>
       financialItemService.update(id, draft),
   );
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.deleteFinancialItem,
     (_event, id: unknown) => financialItemService.delete(id),
   );
-  ipcMain.handle(IPC_CHANNELS.listCategories, () =>
+  handle(IPC_CHANNELS.listCategories, () =>
     categoryService.list(),
   );
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.createCategory,
     (_event, draft: unknown) => categoryService.create(draft),
   );
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.updateCategory,
     (_event, id: unknown, draft: unknown) =>
       categoryService.update(id, draft),
   );
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.deleteCategory,
     (_event, id: unknown) => categoryService.delete(id),
   );
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.reassignAndDeleteCategory,
     (_event, id: unknown, replacementId: unknown) =>
       categoryService.reassignAndDelete(id, replacementId),
   );
-  ipcMain.handle(IPC_CHANNELS.listFinancialItemCustomTypes, () =>
+  handle(IPC_CHANNELS.listFinancialItemCustomTypes, () =>
     customTypeService.list(),
   );
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.createFinancialItemCustomType,
     (_event, draft: unknown) => customTypeService.create(draft),
   );
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.updateFinancialItemCustomType,
     (_event, id: unknown, draft: unknown) =>
       customTypeService.update(id, draft),
   );
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.deleteFinancialItemCustomType,
     (_event, id: unknown) => customTypeService.delete(id),
   );
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.listTransactionsByMonth,
     (_event, year: unknown, month: unknown, offset: unknown) =>
       transactionService.listMonth(year, month, offset),
   );
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.createTransaction,
     (_event, draft: unknown, year: unknown, month: unknown) =>
       transactionService.create(draft, year, month),
   );
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.updateTransaction,
     (
       _event,
@@ -108,7 +124,7 @@ function registerApplicationHandlers(
       month: unknown,
     ) => transactionService.update(id, draft, year, month),
   );
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.deleteTransaction,
     (_event, id: unknown, year: unknown, month: unknown) =>
       transactionService.delete(id, year, month),

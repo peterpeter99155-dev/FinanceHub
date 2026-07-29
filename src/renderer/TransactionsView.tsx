@@ -33,6 +33,10 @@ import type {
   TransactionDraft,
   TransactionMonthSnapshot,
 } from '../shared/transactions';
+import {
+  ERROR_CODES,
+  errorCodeOf,
+} from '../shared/errors';
 import { IconButton } from './IconButton';
 import { MoneyAmount } from './MoneyAmount';
 
@@ -1030,23 +1034,21 @@ function formatTwd(value: number): string {
 }
 
 function transactionErrorMessage(error: unknown): string {
-  if (!(error instanceof Error)) {
-    return '交易儲存失敗，請確認輸入內容。';
-  }
+  const code = errorCodeOf(error);
 
-  if (error.message.includes('future')) {
+  if (code === ERROR_CODES.futureTransaction) {
     return '交易時間不能晚於現在。';
   }
 
-  if (error.message.includes('negative')) {
+  if (code === ERROR_CODES.negativeAccountBalance) {
     return '帳戶餘額不足，無法完成這筆交易。';
   }
 
-  if (error.message.includes('category')) {
+  if (code === ERROR_CODES.invalidCategory) {
     return '請選擇正確的收入或支出分類。';
   }
 
-  if (error.message.includes('account')) {
+  if (code === ERROR_CODES.invalidAccount) {
     return '請選擇正確的收款、付款或信用卡帳戶。';
   }
 

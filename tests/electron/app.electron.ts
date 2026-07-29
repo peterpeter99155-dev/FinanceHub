@@ -27,6 +27,25 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     application = await launchApplication(userDataDirectory);
     let page = await application.firstWindow();
 
+    const ipcError = await page.evaluate(async () => {
+      try {
+        await window.financeHub.financialItems.create({
+          name: 'IPC error probe',
+          direction: 'asset',
+          type: 'cash',
+          amount: 0,
+          status: 'confirmed',
+          includeInNetWorth: true,
+        });
+        return undefined;
+      } catch (error) {
+        return error;
+      }
+    });
+    expect(ipcError).toMatchObject({
+      code: 'AMOUNT_MUST_BE_POSITIVE',
+    });
+
     await expect(page.getByTestId('net-worth')).toContainText('TWD 0');
     await expect(page.getByTestId('summary-equation')).toContainText(
       '淨資產',

@@ -1,4 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import {
+  ERROR_CODES,
+  FinanceHubError,
+} from '../shared/errors';
 
 import {
   DATA_STATUSES,
@@ -156,11 +160,17 @@ function parseDraft(input: unknown): FinancialItemDraft {
   const amount = createTwdAmount(input.amount);
 
   if (amount === 0) {
-    throw new Error('Amount must be greater than zero.');
+    throw new FinanceHubError(
+      ERROR_CODES.amountMustBePositive,
+      'Amount must be greater than zero.',
+    );
   }
 
   if (amount > MAX_FINANCIAL_ITEM_AMOUNT_TWD) {
-    throw new Error('Amount exceeds the allowed maximum.');
+    throw new FinanceHubError(
+      ERROR_CODES.amountOutOfRange,
+      'Amount exceeds the allowed maximum.',
+    );
   }
 
   if (typeof input.includeInNetWorth !== 'boolean') {
