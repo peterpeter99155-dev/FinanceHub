@@ -28,6 +28,7 @@ const TEST_ONLY_PASSWORDS = [
   'S3 Electron password only',
   'S3 browser password only',
   'FinanceHub v1 fixture password for fake data only',
+  'S3 installed acceptance password only',
 ];
 
 async function main() {
