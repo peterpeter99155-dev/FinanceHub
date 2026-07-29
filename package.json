@@ -23,6 +23,10 @@
     "pretest:electron": "npm run package",
     "test:package-smoke": "npm run package && node tests/smoke/package-smoke.cjs",
     "test:watch": "vitest",
+    "test:guards": "vitest run tests/infrastructure/bootstrap-database.test.ts tests/shared/errors.test.ts",
+    "pretest:guards": "npm run prepare:sqlite:node",
+    "verify:architecture": "node scripts/verify-architecture.cjs",
+    "verify": "npm run verify:architecture && npm run test:guards",
     "lint": "eslint ."
   },
   "author": "FinanceHub",

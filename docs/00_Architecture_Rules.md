@@ -447,11 +447,16 @@ await expect(
 | 已套用的 migration 不得修改 | migration 區塊 SHA-256 雜湊固定 | `tests/infrastructure/bootstrap-database.test.ts` |
 | renderer 不得比對錯誤訊息內容、不得出現資料庫字眼 | 掃描 `App.tsx`、`TransactionsView.tsx` 原始碼 | `tests/shared/errors.test.ts` |
 | 每個錯誤代碼都必須有中文文案 | 代碼與文案一一對應檢查 | `tests/shared/errors.test.ts` |
+| renderer `.tsx` 單檔不得超過 300 行 | 掃描所有 renderer TSX 並計算實際行數 | `scripts/verify-architecture.cjs` |
+| 單一元件不得超過 8 個 `useState` | 以 TypeScript AST 計算頂層元件內的呼叫，import 不計 | `scripts/verify-architecture.cjs` |
+| 不得用 `setTimeout` 協調焦點 | 以 TypeScript AST 檢查 `setTimeout` callback 內的 focus 呼叫；通知與防抖等不含 focus 的刻意延遲不受影響 | `scripts/verify-architecture.cjs` |
+| infrastructure 不得 import domain 驗證與計算函式 | 以 TypeScript AST 檢查 domain named import 的 `assert`、`calculate`、`compute`、`validate`、`apply`、`reverse`、`sum` 等函式 | `scripts/verify-architecture.cjs` |
+| diff 不得被純換行或空白假差異掩蓋 | 比對 `git diff`、`git diff -w` 與 `--ignore-space-at-eol` 的檔案與行數 | `scripts/verify-architecture.cjs` |
+| 變更規模異常時必須警告 | 相對 `main` merge-base 超過 25 檔或 1,500 行時輸出警告但不誤判為規則失敗 | `scripts/verify-architecture.cjs` |
 
 ### 尚未機械化、值得未來補上的
 
-- 單檔 300 行、單元件 8 個 `useState` 的上限（可用 lint 規則或測試掃描）
-- 第 6.1 節禁止 `setTimeout` 協調焦點（可用 lint 規則限制特定檔案）
-- infrastructure 不得呼叫 domain 的驗證與計算函式（可用 import 邊界檢查）
+- application service 不得直接依賴具體 repository 實作（目前由 code review 檢查）。
+- renderer 不得實作財務運算（目前只有部分規則由既有測試覆蓋）。
 
 補上任何一項時，請同步更新上方表格。
