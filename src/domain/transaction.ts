@@ -234,12 +234,10 @@ export function calculateMonthlyTransactionSummary(
       continue;
     }
 
-    if (transaction.kind === 'income') {
+    const cashFlow = transactionCashFlow(transaction.kind);
+    if (cashFlow === 'income') {
       totalIncome = addSafeAmount(totalIncome, transaction.amount);
-    } else if (
-      transaction.kind === 'expense' ||
-      transaction.kind === 'credit_card_purchase'
-    ) {
+    } else if (cashFlow === 'expense') {
       totalExpense = addSafeAmount(totalExpense, transaction.amount);
     }
   }
@@ -255,6 +253,48 @@ export function calculateMonthlyTransactionSummary(
     totalExpense: createTwdAmount(totalExpense),
     balance,
   };
+}
+
+export function calculateTransactionBalance(
+  transactions: readonly FinancialTransaction[],
+): number {
+  let balance = 0;
+
+  for (const transaction of transactions) {
+    const cashFlow = transactionCashFlow(transaction.kind);
+    if (cashFlow === 'income') {
+      balance = addSafeAmount(balance, transaction.amount);
+    } else if (cashFlow === 'expense') {
+      balance = addSafeAmount(balance, -transaction.amount);
+    }
+  }
+
+  return balance;
+}
+
+function transactionCashFlow(
+  kind: TransactionKind,
+): 'income' | 'expense' | 'neutral' {
+  if (kind === 'income') {
+    return 'income';
+  }
+  if (kind === 'expense' || kind === 'credit_card_purchase') {
+    return 'expense';
+  }
+  return 'neutral';
+}
+
+export function hasInsufficientAccountBalance(
+  kind: TransactionKind,
+  amount: number,
+  account: TransactionAccount | undefined,
+): boolean {
+  return (
+    kind === 'expense' &&
+    account !== undefined &&
+    Number.isSafeInteger(amount) &&
+    amount > account.balance
+  );
 }
 
 function validateCommonFields(
@@ -433,7 +473,7 @@ function parseDateTime(value: string, field: string): Date {
   return new Date(timestamp);
 }
 
-function addSafeAmount(left: number, right: TwdAmount): number {
+function addSafeAmount(left: number, right: number): number {
   const result = left + right;
 
   if (!Number.isSafeInteger(result)) {

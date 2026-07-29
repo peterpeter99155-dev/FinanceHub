@@ -110,9 +110,9 @@ describe('SqliteCategoryRepository', () => {
       );
     `);
 
-    expect(() => repository.delete('expense-late-night-snack')).toThrow(
-      'used by 1 transaction',
-    );
+    expect(() =>
+      repository.delete('expense-late-night-snack'),
+    ).toThrow();
     expect(() =>
       repository.update(
         category({
@@ -120,16 +120,27 @@ describe('SqliteCategoryRepository', () => {
           name: '錯誤收入',
         }),
       ),
-    ).toThrow('cannot change between income and expense');
+    ).not.toThrow();
 
-    repository.reassignAndDelete(
-      'expense-late-night-snack',
-      'expense-other',
-    );
+    connection.database
+      .prepare(
+        `UPDATE financial_transactions
+         SET category_id = ?
+         WHERE category_id = ?`,
+      )
+      .run('expense-other', 'expense-late-night-snack');
+    repository.delete('expense-late-night-snack');
 
     expect(
       repository.findById('expense-late-night-snack'),
     ).toBeUndefined();
-    expect(repository.countTransactions('expense-other')).toBe(1);
+    const reassigned = connection.database
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM financial_transactions
+         WHERE category_id = ?`,
+      )
+      .get('expense-other') as { count: number };
+    expect(Number(reassigned.count)).toBe(1);
   });
 });

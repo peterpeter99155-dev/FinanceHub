@@ -26,6 +26,8 @@ import {
   MAX_TRANSACTION_AMOUNT_TWD,
   FinancialTransaction,
   TransactionKind,
+  calculateTransactionBalance,
+  hasInsufficientAccountBalance,
 } from '../domain/transaction';
 import type {
   TransactionDraft,
@@ -129,10 +131,13 @@ export function TransactionsView({
   const selectedExpenseAccount = assetAccounts.find(
     (account) => account.id === draft.sourceAccountId,
   );
-  const hasInsufficientBalance =
-    draft.kind === 'expense' &&
-    selectedExpenseAccount !== undefined &&
-    Number(draft.amount) > selectedExpenseAccount.amount;
+  const hasInsufficientBalance = hasInsufficientAccountBalance(
+    draft.kind,
+    Number(draft.amount),
+    selectedExpenseAccount
+      ? toTransactionAccount(selectedExpenseAccount)
+      : undefined,
+  );
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -940,27 +945,8 @@ function groupTransactionsByDate(
     key,
     date: items[0].occurredAt,
     items,
-    balance: calculateDailyBalance(items),
+    balance: calculateTransactionBalance(items),
   }));
-}
-
-function calculateDailyBalance(
-  transactions: readonly FinancialTransaction[],
-): number {
-  return transactions.reduce((balance, transaction) => {
-    if (transaction.kind === 'income') {
-      return balance + transaction.amount;
-    }
-
-    if (
-      transaction.kind === 'expense' ||
-      transaction.kind === 'credit_card_purchase'
-    ) {
-      return balance - transaction.amount;
-    }
-
-    return balance;
-  }, 0);
 }
 
 function dailyBalanceTone(balance: number): string {

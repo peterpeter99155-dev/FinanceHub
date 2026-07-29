@@ -19,6 +19,7 @@ import type {
 import { FINANCIAL_ITEM_TYPE_LABELS } from '../shared/financial-item-labels';
 import type { FinancialItemCustomTypeRepository } from './ports/financial-item-custom-type-repository';
 import type { FinancialItemRepository } from './ports/financial-item-repository';
+import type { TransactionRepository } from './ports/transaction-repository';
 
 export class FinancialItemService {
   constructor(
@@ -26,6 +27,7 @@ export class FinancialItemService {
     private readonly createId: () => string = randomUUID,
     private readonly now: () => string = () => new Date().toISOString(),
     private readonly customTypeRepository?: FinancialItemCustomTypeRepository,
+    private readonly transactions?: TransactionRepository,
   ) {}
 
   list(): FinancialItemSnapshot {
@@ -68,7 +70,7 @@ export class FinancialItemService {
   delete(idInput: unknown): FinancialItemSnapshot {
     const id = parseId(idInput);
 
-    if (this.repository.countTransactions(id) > 0) {
+    if ((this.transactions?.countByAccountId(id) ?? 0) > 0) {
       throw new Error(
         'Financial item cannot be deleted because it has transaction history.',
       );

@@ -6,10 +6,12 @@ import {
   FinancialItemDirection,
 } from '../domain/financial-item';
 import type { FinancialItemCustomTypeRepository } from './ports/financial-item-custom-type-repository';
+import type { FinancialItemRepository } from './ports/financial-item-repository';
 
 export class FinancialItemCustomTypeService {
   constructor(
     private readonly repository: FinancialItemCustomTypeRepository,
+    private readonly financialItems: FinancialItemRepository,
     private readonly createId: () => string = randomUUID,
   ) {}
 
@@ -41,6 +43,17 @@ export class FinancialItemCustomTypeService {
     }
 
     const draft = parseDraft(input);
+    const usageCount = this.financialItems.countByCustomTypeId(id);
+
+    if (existing.direction !== draft.direction && usageCount > 0) {
+      throw new Error(
+        'A used custom type cannot change between asset and liability.',
+      );
+    }
+    if (existing.isActive && !draft.isActive && usageCount > 0) {
+      throw new Error('A used custom type cannot be deactivated.');
+    }
+
     this.repository.update({
       ...existing,
       ...draft,
@@ -49,7 +62,16 @@ export class FinancialItemCustomTypeService {
   }
 
   delete(idInput: unknown): readonly FinancialItemCustomType[] {
-    this.repository.delete(parseId(idInput));
+    const id = parseId(idInput);
+    const usageCount = this.financialItems.countByCustomTypeId(id);
+
+    if (usageCount > 0) {
+      throw new Error(
+        `Financial item custom type is used by ${usageCount} item(s).`,
+      );
+    }
+
+    this.repository.delete(id);
     return this.list();
   }
 }

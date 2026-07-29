@@ -117,6 +117,40 @@ export class SqliteTransactionRepository
     this.insert(transaction);
   }
 
+  countByCategoryId(id: string): number {
+    const row = this.database
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM financial_transactions
+         WHERE category_id = ?`,
+      )
+      .get(id) as { count: number };
+
+    return Number(row.count);
+  }
+
+  countByAccountId(id: string): number {
+    const row = this.database
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM financial_transactions
+         WHERE source_account_id = ? OR destination_account_id = ?`,
+      )
+      .get(id, id) as { count: number };
+
+    return Number(row.count);
+  }
+
+  reassignCategory(id: string, replacementId: string): void {
+    this.database
+      .prepare(
+        `UPDATE financial_transactions
+         SET category_id = ?
+         WHERE category_id = ?`,
+      )
+      .run(replacementId, id);
+  }
+
   update(transaction: FinancialTransaction): void {
     const result = this.database
         .prepare(

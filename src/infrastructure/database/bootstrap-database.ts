@@ -5,6 +5,8 @@ interface Migration {
   readonly sql: string;
 }
 
+// 已發布的 migration 必須保持不可變；schema 或 seed 的任何後續調整，
+// 都必須新增更高版本的 migration，不得回頭修改既有項目。
 const MIGRATIONS: readonly Migration[] = [
   {
     version: 2,

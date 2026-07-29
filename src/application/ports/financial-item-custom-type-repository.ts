@@ -3,7 +3,6 @@ import type { FinancialItemCustomType } from '../../domain/financial-item-custom
 export interface FinancialItemCustomTypeRepository {
   list(): readonly FinancialItemCustomType[];
   findById(id: string): FinancialItemCustomType | undefined;
-  countItems(id: string): number;
   create(type: FinancialItemCustomType): void;
   update(type: FinancialItemCustomType): void;
   delete(id: string): void;

@@ -21,6 +21,9 @@ export interface TransactionRepository {
     year: number,
     month: number,
   ): MonthlyTransactionSummary;
+  countByCategoryId(id: string): number;
+  countByAccountId(id: string): number;
+  reassignCategory(id: string, replacementId: string): void;
   create(transaction: FinancialTransaction): void;
   update(transaction: FinancialTransaction): void;
   delete(id: string): void;

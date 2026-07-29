@@ -46,18 +46,6 @@ export class SqliteFinancialItemCustomTypeRepository
     return row ? mapRow(row) : undefined;
   }
 
-  countItems(id: string): number {
-    const row = this.database
-      .prepare(
-        `SELECT COUNT(*) AS count
-         FROM financial_items
-         WHERE custom_type_id = ?`,
-      )
-      .get(id) as { count: number };
-
-    return Number(row.count);
-  }
-
   create(type: FinancialItemCustomType): void {
     validateFinancialItemCustomType(type);
     this.assertUniqueActiveName(type);
@@ -86,25 +74,6 @@ export class SqliteFinancialItemCustomTypeRepository
       );
     }
 
-    if (
-      existing.direction !== type.direction &&
-      this.countItems(type.id) > 0
-    ) {
-      throw new Error(
-        'A used custom type cannot change between asset and liability.',
-      );
-    }
-
-    if (
-      existing.isActive &&
-      !type.isActive &&
-      this.countItems(type.id) > 0
-    ) {
-      throw new Error(
-        'A used custom type cannot be deactivated.',
-      );
-    }
-
     this.assertUniqueActiveName(type);
     this.database
       .prepare(
@@ -121,14 +90,6 @@ export class SqliteFinancialItemCustomTypeRepository
   }
 
   delete(id: string): void {
-    const usageCount = this.countItems(id);
-
-    if (usageCount > 0) {
-      throw new Error(
-        `Financial item custom type is used by ${usageCount} item(s).`,
-      );
-    }
-
     const result = this.database
       .prepare(
         'DELETE FROM financial_item_custom_types WHERE id = ?',

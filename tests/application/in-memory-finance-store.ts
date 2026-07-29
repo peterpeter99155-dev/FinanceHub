@@ -1,5 +1,6 @@
 import type { CategoryRepository } from '../../src/application/ports/category-repository';
 import type { FinancialItemRepository } from '../../src/application/ports/financial-item-repository';
+import type { FinancialItemCustomTypeRepository } from '../../src/application/ports/financial-item-custom-type-repository';
 import type {
   TransactionPage,
   TransactionRepository,
@@ -7,6 +8,7 @@ import type {
 import type { FinancialCategory } from '../../src/domain/category';
 import { financialMonthFromDateTime } from '../../src/domain/financial-time';
 import type { FinancialItem } from '../../src/domain/financial-item';
+import type { FinancialItemCustomType } from '../../src/domain/financial-item-custom-type';
 import {
   FinancialTransaction,
   calculateMonthlyTransactionSummary,
@@ -16,11 +18,13 @@ export class InMemoryFinanceStore {
   readonly transactions = new Map<string, FinancialTransaction>();
   readonly items = new Map<string, FinancialItem>();
   readonly categories = new Map<string, FinancialCategory>();
+  readonly customTypes = new Map<string, FinancialItemCustomType>();
 
   runInTransaction<T>(operation: () => T): T {
     const transactions = new Map(this.transactions);
     const items = new Map(this.items);
     const categories = new Map(this.categories);
+    const customTypes = new Map(this.customTypes);
 
     try {
       return operation();
@@ -28,6 +32,7 @@ export class InMemoryFinanceStore {
       replaceMap(this.transactions, transactions);
       replaceMap(this.items, items);
       replaceMap(this.categories, categories);
+      replaceMap(this.customTypes, customTypes);
       throw error;
     }
   }
@@ -70,17 +75,6 @@ export class InMemoryFinanceStore {
     ).length;
   }
 
-  reassignAndDelete(id: string, replacementId: string): void {
-    for (const [key, transaction] of this.transactions) {
-      if (transaction.categoryId === id) {
-        this.transactions.set(key, {
-          ...transaction,
-          categoryId: replacementId,
-        });
-      }
-    }
-    this.categories.delete(id);
-  }
 }
 
 export function transactionRepository(store: InMemoryFinanceStore) {
@@ -89,6 +83,26 @@ export function transactionRepository(store: InMemoryFinanceStore) {
     findById: (id: string) => store.transactions.get(id),
     listByMonth: store.listByMonth.bind(store),
     summarizeMonth: store.summarizeMonth.bind(store),
+    countByCategoryId: (id: string) =>
+      [...store.transactions.values()].filter(
+        (transaction) => transaction.categoryId === id,
+      ).length,
+    countByAccountId: (id: string) =>
+      [...store.transactions.values()].filter(
+        (transaction) =>
+          transaction.sourceAccountId === id ||
+          transaction.destinationAccountId === id,
+      ).length,
+    reassignCategory: (id: string, replacementId: string) => {
+      for (const [key, transaction] of store.transactions) {
+        if (transaction.categoryId === id) {
+          store.transactions.set(key, {
+            ...transaction,
+            categoryId: replacementId,
+          });
+        }
+      }
+    },
     create: (transaction: FinancialTransaction) =>
       store.transactions.set(transaction.id, transaction),
     update: (transaction: FinancialTransaction) =>
@@ -101,7 +115,10 @@ export function financialItemRepository(store: InMemoryFinanceStore) {
   return {
     list: () => [...store.items.values()],
     findById: (id: string) => store.items.get(id),
-    countTransactions: store.countTransactions.bind(store),
+    countByCustomTypeId: (id: string) =>
+      [...store.items.values()].filter(
+        (item) => item.customTypeId === id,
+      ).length,
     create: (item: FinancialItem) => store.items.set(item.id, item),
     update: (item: FinancialItem) => store.items.set(item.id, item),
     delete: (id: string) => store.items.delete(id),
@@ -112,14 +129,24 @@ export function categoryRepository(store: InMemoryFinanceStore) {
   return {
     list: () => [...store.categories.values()],
     findById: (id: string) => store.categories.get(id),
-    countTransactions: store.countTransactions.bind(store),
     create: (category: FinancialCategory) =>
       store.categories.set(category.id, category),
     update: (category: FinancialCategory) =>
       store.categories.set(category.id, category),
     delete: (id: string) => store.categories.delete(id),
-    reassignAndDelete: store.reassignAndDelete.bind(store),
   } satisfies CategoryRepository;
+}
+
+export function customTypeRepository(store: InMemoryFinanceStore) {
+  return {
+    list: () => [...store.customTypes.values()],
+    findById: (id: string) => store.customTypes.get(id),
+    create: (type: FinancialItemCustomType) =>
+      store.customTypes.set(type.id, type),
+    update: (type: FinancialItemCustomType) =>
+      store.customTypes.set(type.id, type),
+    delete: (id: string) => store.customTypes.delete(id),
+  } satisfies FinancialItemCustomTypeRepository;
 }
 
 function replaceMap<K, V>(target: Map<K, V>, source: Map<K, V>) {

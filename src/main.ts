@@ -153,18 +153,26 @@ void app.whenReady().then(() => {
     new SqliteFinancialItemCustomTypeRepository(
       bootstrapDatabase.database,
     );
+  const transactionRepository = new SqliteTransactionRepository(
+    bootstrapDatabase.database,
+  );
   const financialItemService = new FinancialItemService(
     repository,
     undefined,
     undefined,
     customTypeRepository,
+    transactionRepository,
   );
-  const categoryService = new CategoryService(categoryRepository);
+  const categoryService = new CategoryService(
+    categoryRepository,
+    transactionRepository,
+  );
   const customTypeService = new FinancialItemCustomTypeService(
     customTypeRepository,
+    repository,
   );
   const transactionService = new TransactionService(
-    new SqliteTransactionRepository(bootstrapDatabase.database),
+    transactionRepository,
     categoryRepository,
     repository,
   );

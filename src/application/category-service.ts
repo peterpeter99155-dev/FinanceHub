@@ -4,12 +4,15 @@ import {
   CATEGORY_KINDS,
   CategoryKind,
   FinancialCategory,
+  getCategoryRemovalPolicy,
 } from '../domain/category';
 import type { CategoryRepository } from './ports/category-repository';
+import type { TransactionRepository } from './ports/transaction-repository';
 
 export class CategoryService {
   constructor(
     private readonly repository: CategoryRepository,
+    private readonly transactions: TransactionRepository,
     private readonly createId: () => string = randomUUID,
   ) {}
 
@@ -35,8 +38,19 @@ export class CategoryService {
     if (!existing) {
       throw new Error(`Financial category "${id}" was not found.`);
     }
+    if (existing.isBuiltIn) {
+      throw new Error('Built-in financial categories cannot be modified.');
+    }
 
     const draft = parseDraft(input);
+    if (
+      existing.kind !== draft.kind &&
+      this.transactions.countByCategoryId(id) > 0
+    ) {
+      throw new Error(
+        'A used financial category cannot change between income and expense.',
+      );
+    }
     this.repository.update({
       ...existing,
       ...draft,
@@ -45,7 +59,27 @@ export class CategoryService {
   }
 
   delete(idInput: unknown): readonly FinancialCategory[] {
-    this.repository.delete(parseId(idInput));
+    const id = parseId(idInput);
+    const existing = this.repository.findById(id);
+
+    if (!existing) {
+      throw new Error(`Financial category "${id}" was not found.`);
+    }
+    if (existing.isBuiltIn) {
+      throw new Error('Built-in financial categories cannot be deleted.');
+    }
+
+    const policy = getCategoryRemovalPolicy(
+      this.transactions.countByCategoryId(id),
+    );
+
+    if (policy.action === 'reassign_required') {
+      throw new Error(
+        `Financial category is used by ${policy.usageCount} transaction(s).`,
+      );
+    }
+
+    this.repository.delete(id);
     return this.list();
   }
 
@@ -53,10 +87,31 @@ export class CategoryService {
     idInput: unknown,
     replacementIdInput: unknown,
   ): readonly FinancialCategory[] {
-    this.repository.reassignAndDelete(
-      parseId(idInput),
-      parseId(replacementIdInput),
-    );
+    const id = parseId(idInput);
+    const replacementId = parseId(replacementIdInput);
+    const source = this.repository.findById(id);
+    const replacement = this.repository.findById(replacementId);
+
+    if (id === replacementId) {
+      throw new Error('Replacement category must be different.');
+    }
+    if (!source) {
+      throw new Error(`Financial category "${id}" was not found.`);
+    }
+    if (source.isBuiltIn) {
+      throw new Error('Built-in financial categories cannot be deleted.');
+    }
+    if (!replacement || !replacement.isActive) {
+      throw new Error('Replacement category must be active.');
+    }
+    if (source.kind !== replacement.kind) {
+      throw new Error('Replacement category must have the same kind.');
+    }
+
+    this.transactions.runInTransaction(() => {
+      this.transactions.reassignCategory(id, replacementId);
+      this.repository.delete(id);
+    });
     return this.list();
   }
 }

@@ -57,14 +57,14 @@ export class SqliteFinancialItemRepository
     return row ? mapRow(row) : undefined;
   }
 
-  countTransactions(id: string): number {
+  countByCustomTypeId(id: string): number {
     const row = this.database
       .prepare(
         `SELECT COUNT(*) AS count
-         FROM financial_transactions
-         WHERE source_account_id = ? OR destination_account_id = ?`,
+         FROM financial_items
+         WHERE custom_type_id = ?`,
       )
-      .get(id, id) as { count: number };
+      .get(id) as { count: number };
 
     return Number(row.count);
   }
