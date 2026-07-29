@@ -1,4 +1,4 @@
-import type { DatabaseSync } from 'node:sqlite';
+import type { SqliteDatabase } from './sqlite-database';
 
 import type { FinancialItemRepository } from '../../application/ports/financial-item-repository';
 import {
@@ -29,7 +29,7 @@ interface FinancialItemRow {
 export class SqliteFinancialItemRepository
   implements FinancialItemRepository
 {
-  constructor(private readonly database: DatabaseSync) {}
+  constructor(private readonly database: SqliteDatabase) {}
 
   list(): readonly FinancialItem[] {
     const rows = this.database

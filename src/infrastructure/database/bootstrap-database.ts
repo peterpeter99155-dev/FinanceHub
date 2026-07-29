@@ -1,4 +1,7 @@
-import { DatabaseSync } from 'node:sqlite';
+import {
+  openSqliteDatabase,
+  SqliteDatabase,
+} from './sqlite-database';
 
 interface Migration {
   readonly version: number;
@@ -166,12 +169,12 @@ const MIGRATIONS: readonly Migration[] = [
 ] as const;
 
 export interface BootstrapDatabase {
-  readonly database: DatabaseSync;
+  readonly database: SqliteDatabase;
   close(): void;
 }
 
 export function openBootstrapDatabase(databasePath: string): BootstrapDatabase {
-  const database = new DatabaseSync(databasePath);
+  const database = openSqliteDatabase(databasePath);
 
   try {
     database.exec('PRAGMA journal_mode = WAL;');
@@ -205,7 +208,7 @@ export function openBootstrapDatabase(databasePath: string): BootstrapDatabase {
 }
 
 function applyMigration(
-  database: DatabaseSync,
+  database: SqliteDatabase,
   migration: Migration,
 ): void {
   const existing = database

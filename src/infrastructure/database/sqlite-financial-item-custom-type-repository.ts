@@ -1,4 +1,4 @@
-import type { DatabaseSync } from 'node:sqlite';
+import type { SqliteDatabase } from './sqlite-database';
 import {
   ERROR_CODES,
   FinanceHubError,
@@ -24,7 +24,7 @@ interface CustomTypeRow {
 export class SqliteFinancialItemCustomTypeRepository
   implements FinancialItemCustomTypeRepository
 {
-  constructor(private readonly database: DatabaseSync) {}
+  constructor(private readonly database: SqliteDatabase) {}
 
   list(): readonly FinancialItemCustomType[] {
     const rows = this.database

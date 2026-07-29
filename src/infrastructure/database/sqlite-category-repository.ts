@@ -1,4 +1,4 @@
-import type { DatabaseSync } from 'node:sqlite';
+import type { SqliteDatabase } from './sqlite-database';
 
 import type { CategoryRepository } from '../../application/ports/category-repository';
 import {
@@ -18,7 +18,7 @@ interface CategoryRow {
 }
 
 export class SqliteCategoryRepository implements CategoryRepository {
-  constructor(private readonly database: DatabaseSync) {}
+  constructor(private readonly database: SqliteDatabase) {}
 
   list(): readonly FinancialCategory[] {
     const rows = this.database

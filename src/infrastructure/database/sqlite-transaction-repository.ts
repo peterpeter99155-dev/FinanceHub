@@ -1,4 +1,4 @@
-import type { DatabaseSync } from 'node:sqlite';
+import type { SqliteDatabase } from './sqlite-database';
 
 import type {
   TransactionPage,
@@ -34,7 +34,7 @@ interface TransactionRow {
 export class SqliteTransactionRepository
   implements TransactionRepository
 {
-  constructor(private readonly database: DatabaseSync) {}
+  constructor(private readonly database: SqliteDatabase) {}
 
   runInTransaction<T>(operation: () => T): T {
     this.database.exec('BEGIN IMMEDIATE;');
