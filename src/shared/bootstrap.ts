@@ -7,6 +7,7 @@ import type { TransactionsApi } from './transactions';
 
 export const IPC_CHANNELS = {
   getBootstrapStatus: 'app:get-bootstrap-status',
+  unlockDatabase: 'app:unlock-database',
   listFinancialItems: 'financial-items:list',
   createFinancialItem: 'financial-items:create',
   updateFinancialItem: 'financial-items:update',
@@ -34,6 +35,7 @@ export interface BootstrapStatus {
 
 export interface FinanceHubApi {
   getBootstrapStatus(): Promise<BootstrapStatus>;
+  unlockDatabase(password: string): Promise<void>;
   financialItems: FinancialItemsApi;
   categories: CategoriesApi;
   financialItemCustomTypes: FinancialItemCustomTypesApi;

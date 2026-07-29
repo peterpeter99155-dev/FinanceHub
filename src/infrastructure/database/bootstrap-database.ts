@@ -177,25 +177,7 @@ export function openBootstrapDatabase(databasePath: string): BootstrapDatabase {
   const database = openSqliteDatabase(databasePath);
 
   try {
-    database.exec('PRAGMA journal_mode = WAL;');
-    database.exec('PRAGMA foreign_keys = ON;');
-    database.exec(`
-      CREATE TABLE IF NOT EXISTS schema_migrations (
-        version INTEGER PRIMARY KEY,
-        applied_at TEXT NOT NULL
-      );
-    `);
-
-    database
-      .prepare(
-        `INSERT OR IGNORE INTO schema_migrations (version, applied_at)
-         VALUES (?, ?)`,
-      )
-      .run(1, new Date().toISOString());
-
-    for (const migration of MIGRATIONS) {
-      applyMigration(database, migration);
-    }
+    bootstrapDatabaseConnection(database);
   } catch (error) {
     database.close();
     throw error;
@@ -205,6 +187,30 @@ export function openBootstrapDatabase(databasePath: string): BootstrapDatabase {
     database,
     close: () => database.close(),
   };
+}
+
+export function bootstrapDatabaseConnection(
+  database: SqliteDatabase,
+): void {
+  database.exec('PRAGMA journal_mode = WAL;');
+  database.exec('PRAGMA foreign_keys = ON;');
+  database.exec(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        version INTEGER PRIMARY KEY,
+        applied_at TEXT NOT NULL
+      );
+    `);
+
+  database
+    .prepare(
+      `INSERT OR IGNORE INTO schema_migrations (version, applied_at)
+         VALUES (?, ?)`,
+    )
+    .run(1, new Date().toISOString());
+
+  for (const migration of MIGRATIONS) {
+    applyMigration(database, migration);
+  }
 }
 
 function applyMigration(

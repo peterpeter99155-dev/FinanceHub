@@ -801,6 +801,13 @@ HKDF 的 salt 使用長度為 0 的 byte sequence；scrypt 已使用每個資料
 
 實作必須使用非同步 `scrypt`，不得使用 `scryptSync`。目標機的一次 v1 導出約需 371 ms；若在 Electron main process 同步執行，期間會阻塞事件迴圈，使視窗、IPC 與作業系統事件看起來無回應。非同步執行不降低 KDF 成本，只避免把計算等待轉成介面凍結。
 
+#### 記憶體清除的能力邊界
+
+- 使用者主密碼必須只透過單一解鎖 IPC 一次性傳入 main process；不得回傳、保存、記錄或再跨 IPC 傳送。
+- JavaScript 字串是 immutable，無法可靠覆寫或清零。程式能做的是不保存主密碼引用並在導出完成後立即離開作用域；不得宣稱密碼已從記憶體、swap、crash dump 或原生函式庫副本完全消失。
+- 密碼 UTF-8 bytes、scrypt 主金鑰、HKDF 子金鑰、raw-key 暫存 Buffer 在使用後必須以 `fill(0)` 做 best-effort 清零，但同樣不能保證執行環境或原生函式庫沒有其他副本。
+- 密碼、主金鑰與子金鑰不得出現在檔案、log、錯誤訊息、IPC 回傳值或診斷輸出。
+
 #### salt：32 bytes、CSPRNG
 
 - 每個資料庫獨立產生，避免兩個使用相同密碼的資料庫得到相同主金鑰，也阻止預先計算表重用。
@@ -901,6 +908,16 @@ ChaCha20-Poly1305 為每個資料庫頁面從主金鑰、頁碼與 16-byte nonce
 - OWASP Password Storage Cheat Sheet：scrypt 最低建議為 `N = 2^17`、`r = 8`、`p = 1`。
 - SQLite3 Multiple Ciphers 官方文件：推薦 `chacha20`；每頁使用 nonce 與 Poly1305 authentication tag，並支援 raw 32-byte key。
 - SQLite3 Multiple Ciphers 官方文件：`hmac_check` 預設可被關閉，因此 FinanceHub 必須明確固定為啟用，不能依賴預設。
+
+### S3-14 實測結果
+
+2026-07-29 使用 `better-sqlite3-multiple-ciphers` 12.11.1、Electron 42 ABI 146 對格式 v1 實測：
+
+- 加密連線回報 `cipher = chacha20`、`hmac_check = 1`、`page_size = 4096`。
+- 在保持 WAL 連線開啟時寫入 UTF-8 已知字串「示範銀行存款」，實際取得 `financehub.db`、`financehub.db-wal`、`financehub.db-shm`，並一併列舉所有名稱含 `journal` 的相關檔案。逐檔以原始 bytes 搜尋該 UTF-8 byte sequence，結果為 0 筆。
+- 關閉資料庫後翻轉 `financehub.db` 第一頁 offset 200 的一個 bit，再以正確主密碼開啟；key verifier 通過，但第一次讀取 `sqlite_master` 失敗，FinanceHub 回傳穩定代碼 `DATABASE_UNREADABLE`，沒有回傳未驗證資料。
+
+因此格式 v1 的 page authentication 在目前目標套件與平台上確實生效。此結果只涵蓋資料庫、WAL、SHM 與 journal；metadata sidecar 仍需依其獨立 verifier／schema 規則處理，不能把 page authentication 誤認為整個備份集合的防回滾機制。
 
 ---
 

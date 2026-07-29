@@ -1,0 +1,155 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+import {
+  openExistingEncryptedDatabase,
+  openOrCreateEncryptedDatabase,
+} from '../../src/infrastructure/database/encrypted-database';
+import { ERROR_CODES } from '../../src/shared/errors';
+
+const TEST_PASSWORD = 'S3 core fixed password only';
+const WRONG_TEST_PASSWORD = 'S3 core wrong password only';
+
+describe('encrypted database core', () => {
+  let directory: string | undefined;
+
+  afterEach(() => {
+    if (directory) {
+      rmSync(directory, { recursive: true, force: true });
+      directory = undefined;
+    }
+  });
+
+  it('does not modify the database or sidecar when the password is wrong', async () => {
+    const databasePath = createDatabasePath();
+    const connection = await openOrCreateEncryptedDatabase(
+      databasePath,
+      TEST_PASSWORD,
+    );
+    connection.close();
+    const metadataPath = `${databasePath}.metadata.json`;
+    const databaseBefore = snapshot(databasePath);
+    const metadataBefore = snapshot(metadataPath);
+
+    await expect(
+      openExistingEncryptedDatabase(
+        databasePath,
+        WRONG_TEST_PASSWORD,
+      ),
+    ).rejects.toMatchObject({
+      code: ERROR_CODES.wrongPassword,
+    });
+
+    expect(snapshot(databasePath)).toEqual(databaseBefore);
+    expect(snapshot(metadataPath)).toEqual(metadataBefore);
+  });
+
+  it('keeps known financial plaintext out of the database and journal files', async () => {
+    const databasePath = createDatabasePath();
+    const connection = await openOrCreateEncryptedDatabase(
+      databasePath,
+      TEST_PASSWORD,
+    );
+    const knownPlaintext = '示範銀行存款';
+
+    try {
+      connection.database
+        .prepare(`
+          INSERT INTO financial_items (
+            id, name, direction, type, amount, status, updated_at,
+            is_active, include_in_net_worth
+          ) VALUES (?, ?, 'asset', 'bank_deposit', 1000, 'confirmed', ?, 1, 1)
+        `)
+        .run(
+          'plaintext-probe',
+          knownPlaintext,
+          '2026-07-29T00:00:00.000Z',
+        );
+
+      const files = encryptedDatabaseFiles(databasePath);
+      expect(files).toContain(databasePath);
+      expect(files).toContain(`${databasePath}-wal`);
+      expect(files).toContain(`${databasePath}-shm`);
+
+      const needle = Buffer.from(knownPlaintext, 'utf8');
+      const leaks = files.filter((filePath) =>
+        readFileSync(filePath).includes(needle),
+      );
+      expect(leaks).toEqual([]);
+      expect(
+        connection.database.pragma('cipher', { simple: true }),
+      ).toBe('chacha20');
+      expect(
+        connection.database.pragma('hmac_check', { simple: true }),
+      ).toBe('1');
+      expect(
+        connection.database.pragma('page_size', { simple: true }),
+      ).toBe(4096);
+    } finally {
+      connection.close();
+    }
+  });
+
+  it('reports an authenticated page failure as an unreadable database', async () => {
+    const databasePath = createDatabasePath();
+    const connection = await openOrCreateEncryptedDatabase(
+      databasePath,
+      TEST_PASSWORD,
+    );
+    connection.close();
+
+    const encrypted = readFileSync(databasePath);
+    encrypted[200] ^= 0xff;
+    writeFileSync(databasePath, encrypted);
+
+    await expect(
+      openExistingEncryptedDatabase(databasePath, TEST_PASSWORD),
+    ).rejects.toMatchObject({
+      code: ERROR_CODES.databaseUnreadable,
+    });
+  });
+
+  function createDatabasePath(): string {
+    directory = mkdtempSync(
+      path.join(tmpdir(), 'financehub-encryption-test-'),
+    );
+    return path.join(directory, 'financehub.db');
+  }
+});
+
+function snapshot(filePath: string): {
+  readonly content: Buffer;
+  readonly modifiedNanoseconds: bigint;
+} {
+  return {
+    content: readFileSync(filePath),
+    modifiedNanoseconds: statSync(filePath, {
+      bigint: true,
+    }).mtimeNs,
+  };
+}
+
+function encryptedDatabaseFiles(databasePath: string): string[] {
+  const directory = path.dirname(databasePath);
+  const basename = path.basename(databasePath);
+  return readdirSync(directory)
+    .filter(
+      (name) =>
+        name === basename ||
+        name === `${basename}-wal` ||
+        name === `${basename}-shm` ||
+        name.includes('journal'),
+    )
+    .map((name) => path.join(directory, name))
+    .filter(existsSync);
+}

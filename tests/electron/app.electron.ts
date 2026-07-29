@@ -16,6 +16,7 @@ const executablePath = path.resolve(
   'electron.exe',
 );
 const applicationEntry = path.resolve('.webpack', 'x64', 'main');
+const TEST_PASSWORD = 'S3 Electron password only';
 
 test('completes the Sprint 01 net-worth flow and persists data', async () => {
   const userDataDirectory = mkdtempSync(
@@ -26,6 +27,7 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
   try {
     application = await launchApplication(userDataDirectory);
     let page = await application.firstWindow();
+    await unlockDatabase(page);
 
     const ipcError = await page.evaluate(async () => {
       try {
@@ -156,6 +158,7 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     await application.close();
     application = await launchApplication(userDataDirectory);
     page = await application.firstWindow();
+    await unlockDatabase(page);
 
     await expect(page.getByTestId('net-worth')).toContainText(
       'TWD 4,100,000',
@@ -236,6 +239,25 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     rmSync(userDataDirectory, { recursive: true, force: true });
   }
 });
+
+async function unlockDatabase(page: Page): Promise<void> {
+  const error = await page.evaluate(
+    async (password) => {
+      try {
+        await window.financeHub.unlockDatabase(password);
+        return undefined;
+      } catch (caught) {
+        return caught;
+      }
+    },
+    TEST_PASSWORD,
+  );
+  if (error) {
+    throw new Error(`Unlock failed: ${JSON.stringify(error)}`);
+  }
+  await page.reload();
+  await page.waitForLoadState('domcontentloaded');
+}
 
 async function launchApplication(
   userDataDirectory: string,

@@ -10,6 +10,16 @@ export const ERROR_CODES = {
   negativeAccountBalance: 'NEGATIVE_ACCOUNT_BALANCE',
   invalidCategory: 'INVALID_CATEGORY',
   invalidAccount: 'INVALID_ACCOUNT',
+  invalidPassword: 'INVALID_PASSWORD',
+  wrongPassword: 'WRONG_PASSWORD',
+  databaseMetadataMissing: 'DATABASE_METADATA_MISSING',
+  databaseFileMissing: 'DATABASE_FILE_MISSING',
+  databaseSetupIncomplete: 'DATABASE_SETUP_INCOMPLETE',
+  unsupportedEncryptionFormat: 'UNSUPPORTED_ENCRYPTION_FORMAT',
+  invalidDatabaseMetadata: 'INVALID_DATABASE_METADATA',
+  databaseUnreadable: 'DATABASE_UNREADABLE',
+  databaseLocked: 'DATABASE_LOCKED',
+  databaseAlreadyUnlocked: 'DATABASE_ALREADY_UNLOCKED',
 } as const;
 
 export type ErrorCode =

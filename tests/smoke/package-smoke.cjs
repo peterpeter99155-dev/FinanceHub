@@ -1,4 +1,9 @@
-const { existsSync, mkdtempSync, rmSync } = require('node:fs');
+const {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+} = require('node:fs');
 const { createServer } = require('node:net');
 const { tmpdir } = require('node:os');
 const path = require('node:path');
@@ -10,6 +15,18 @@ const executablePath = path.resolve(
   'FinanceHub-win32-x64',
   'FinanceHub.exe',
 );
+const packagedAsarPath = path.resolve(
+  'out',
+  'FinanceHub-win32-x64',
+  'resources',
+  'app.asar',
+);
+const TEST_ONLY_PASSWORDS = [
+  'S3 core fixed password only',
+  'S3 core wrong password only',
+  'S3 controller password only',
+  'S3 Electron password only',
+];
 
 async function main() {
   if (!existsSync(executablePath)) {
@@ -50,18 +67,52 @@ async function main() {
 
     await page.getByText('FinanceHub', { exact: true }).waitFor();
 
+    const lockedState = await page.evaluate(async () => {
+      const status = await window.financeHub.getBootstrapStatus();
+      let financialIpcFailed = false;
+      try {
+        await window.financeHub.financialItems.list();
+      } catch {
+        financialIpcFailed = true;
+      }
+      return { status, financialIpcFailed };
+    });
+    if (lockedState.status.databaseReady) {
+      throw new Error('Packaged app reported an unlocked database.');
+    }
+    if (!lockedState.financialIpcFailed) {
+      throw new Error('Financial IPC was callable before unlock.');
+    }
+
     const databasePath = path.join(
       userDataDirectory,
-      'financehub.dev.db',
+      'financehub.db',
     );
-    await waitFor(() => existsSync(databasePath), 15_000);
+    const metadataPath = `${databasePath}.metadata.json`;
+    if (existsSync(databasePath) || existsSync(metadataPath)) {
+      throw new Error(
+        'Packaged app created financial storage before unlock.',
+      );
+    }
+
+    const productionBundle = readFileSync(packagedAsarPath);
+    const leakedTestPasswords = TEST_ONLY_PASSWORDS.filter((password) =>
+      productionBundle.includes(Buffer.from(password, 'utf8')),
+    );
+    if (leakedTestPasswords.length > 0) {
+      throw new Error(
+        'A test-only password was included in the production bundle.',
+      );
+    }
 
     process.stdout.write(
       [
         'Package smoke passed.',
         `Executable: ${executablePath}`,
         `Main window title: ${title}`,
-        `Database initialized: ${databasePath}`,
+        'Database remained locked: true',
+        'Financial IPC rejected before unlock: true',
+        'Test-only passwords in production bundle: 0',
         '',
       ].join('\n'),
     );
@@ -103,17 +154,6 @@ async function findAvailablePort() {
       server.close(() => resolve(address.port));
     });
   });
-}
-
-async function waitFor(predicate, timeout) {
-  const deadline = Date.now() + timeout;
-  while (Date.now() < deadline) {
-    if (predicate()) {
-      return;
-    }
-    await delay(100);
-  }
-  throw new Error('Timed out waiting for packaged app state.');
 }
 
 async function waitForProcessExit(child, timeout) {

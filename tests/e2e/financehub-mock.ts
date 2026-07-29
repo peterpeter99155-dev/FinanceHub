@@ -64,6 +64,7 @@ function createApi(state: MutableState): FinanceHubApi {
       databaseReady: true,
       storagePolicy: 'sample-data-only',
     }),
+    unlockDatabase: async () => undefined,
     financialItems: {
       list: async () => financialItemSnapshot(state),
       create: async (draft) => {

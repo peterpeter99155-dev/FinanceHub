@@ -319,7 +319,7 @@ Chromium 安全更新在 EOL 之後將完全停止。本專案不載入任何外
 ### 做法
 
 - 建立獨立的 metadata 檔案（sidecar），與資料庫放在同一目錄。
-- 內容：格式版本、KDF 版本、salt、cipher 參數、key verifier（見 S3-12）。
+- 內容：格式版本、KDF 版本、salt、key verifier（見 S3-12）。KDF 與 cipher 參數只存在程式內建可信版本表，不寫入 sidecar。
 - **salt 與這些 metadata 明文保存是設計的一部分**，不是缺陷。它們不足以推導金鑰。
 - 寫入必須是原子操作（先寫暫存檔再改名），避免中途斷電產生半寫入的檔案。
 
