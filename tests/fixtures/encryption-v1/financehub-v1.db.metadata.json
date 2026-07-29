@@ -1,0 +1,14 @@
+{
+  "formatVersion": 1,
+  "kdfVersion": 1,
+  "salt": {
+    "encoding": "base64",
+    "value": "w1IUHVKelzLEz+C9MsZhiW9XyUs21JNEV8rSzAytL2k="
+  },
+  "keyVerifier": {
+    "version": 1,
+    "algorithm": "HMAC-SHA-256",
+    "encoding": "base64",
+    "value": "ZA9VAJyG9q+Dc0/3Nu3QjrEUxVXLpTg9qxfYwOO2nBY="
+  }
+}

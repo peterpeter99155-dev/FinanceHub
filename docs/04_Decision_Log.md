@@ -921,6 +921,102 @@ ChaCha20-Poly1305 為每個資料庫頁面從主金鑰、頁碼與 16-byte nonce
 
 ---
 
+## DEC-033 Sprint 03 加密實作與資料存放決議
+
+- 日期：2026-07-29
+- 狀態：已確認
+- 對應：S3-30～S3-33
+
+### 1. Electron 由 43 降至 42
+
+`better-sqlite3-multiple-ciphers` v12.11.1 在 Windows x64 提供的
+Electron 預編譯檔最高為 `electron-v146`；ABI 146 對應 Electron
+42。Electron 43 需要 ABI 148，但目標開發機沒有完整的 C++ 原生
+模組編譯工具鏈。
+
+因此 FinanceHub 暫時由 Electron 43 降至 Electron 42，直接使用
+套件提供且已驗證雜湊一致的預編譯檔。不得以來源不明的 binary
+或跳過 ABI 檢查作為替代方案。
+
+### 2. Electron 42 EOL 是有期限的技術債
+
+Electron 42 的官方安全更新支援截止日為 **2026-10-20**。這不是
+永久版本選擇，而是必須在期限前處理的技術債。
+
+升版路徑依序為：
+
+1. 若資料庫套件提供 Windows x64 ABI 148 或更新版本的可信
+   預編譯檔，驗證相容性 fixture、打包與 Electron 測試後升回。
+2. 若沒有預編譯檔，必須評估安裝與維護 C++ 工具鏈，或改採
+   經審查的檔案層加密方案。
+
+不得在 EOL 後無期限繼續使用 Electron 42，也不得為了升版關閉
+資料庫加密或完整性驗證。
+
+### 3. 加密格式 v1
+
+加密格式全文以本文件 **DEC-032 FinanceHub 加密格式 v1** 為唯一
+規格來源，並在本決議再次確認其實作內容：
+
+- `formatVersion = 1`、`kdfVersion = 1`。
+- 非同步 scrypt：`N = 262144`、`r = 8`、`p = 1`、
+  `keyLength = 32 bytes`、`maxmem = 512 MiB`。
+- 每個資料庫使用 CSPRNG 產生 32-byte salt。
+- HKDF-SHA-256 分離資料庫金鑰與 verifier 金鑰。
+- cipher 為 `chacha20`，`legacy = 0`、
+  `plaintextHeaderSize = 0`、`hmacCheck = 1`、
+  raw key、page size 4096。
+- 密碼不 trim，先做 Unicode NFC，再編碼為 UTF-8。
+- sidecar 只保存格式版本、KDF 版本、salt 與 key verifier；
+  KDF/cipher 參數只由程式內建可信版本表提供。
+
+任何參數調整都必須依 DEC-032 的版本演進流程建立新版本，不得
+修改既有 v1 定義。
+
+### 4. 主密碼最小長度為 8
+
+產品層最低長度固定為 8 個 Unicode scalar values，不強制大小寫、
+數字或符號，並引導使用多個不相關詞組成的較長密語。
+
+未來不能直接提高既有解鎖畫面的最低長度：既有使用者可能已使用
+符合舊規則但短於新門檻的密碼，直接提高會在正確密碼下仍把使用者
+鎖在資料之外。調高前必須先設計「舊密碼仍可解鎖、解鎖後引導更換」
+的過渡流程。
+
+### 5. 不轉換 `financehub.dev.db`
+
+舊的 `financehub.dev.db` 只包含開發假資料，因此不建立只會使用
+一次、之後需永久維護的轉換 migration。新版使用
+`financehub.db` 與 `financehub.db.metadata.json`，不讀取、不修改
+舊檔。使用者確認不需要假資料後，可在 FinanceHub 完全關閉時
+手動刪除舊檔。
+
+若未來出現含真實資料的舊格式，不能套用本例外；必須另行設計、
+測試並記錄可復原的遷移流程。
+
+### 6. 記憶體清理的實際界線
+
+JavaScript 字串不可變，無法可靠覆寫或清零。FinanceHub 能做到的
+是讓主密碼只跨一次解鎖 IPC、不保存或記錄、導出後盡快移除引用。
+密碼 bytes、主金鑰與子金鑰等可控 Buffer 會以 `fill(0)` 做
+best-effort 清零。
+
+不得宣稱 JavaScript runtime、原生函式庫、swap 或 crash dump 中
+完全不存在副本，也不得把無法保證的「安全清除」寫成產品承諾。
+
+### 7. 資料存放原則
+
+開發、測試、範例與 Git fixture 一律只使用假資料或匿名化資料。
+正式版可以保存真實財務資料，但只建議存放在使用者自己擁有並管理
+的電腦上。
+
+檔案加密能保護遭竊裝置、外洩備份與雲端同步檔案，不能防禦持有
+電腦系統管理權限的一方。公司、學校或他人所有的電腦管理者仍可能
+複製檔案、讀取備份或以監控軟體記錄密碼，因此這些裝置只能用
+假資料試用。
+
+---
+
 ## Migration 歷史例外與紀律
 
 - Migration 4 同時包含 schema 變更與預設分類寫入，為技術架構規範建立前的歷史例外，保留原狀，不得修改或拆解。

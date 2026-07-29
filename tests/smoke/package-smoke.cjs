@@ -27,6 +27,7 @@ const TEST_ONLY_PASSWORDS = [
   'S3 controller password only',
   'S3 Electron password only',
   'S3 browser password only',
+  'FinanceHub v1 fixture password for fake data only',
 ];
 
 async function main() {

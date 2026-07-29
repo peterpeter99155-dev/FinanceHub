@@ -34,6 +34,9 @@ samples/raw/
 *.sqlcipher
 *.backup
 
+# Fixed, fake encrypted compatibility fixture (safe to commit)
+!tests/fixtures/encryption-v1/financehub-v1.db
+
 # Financial source documents
 *.pdf
 *.ofx
