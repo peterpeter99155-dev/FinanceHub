@@ -727,6 +727,183 @@ Sprint 2.5 是純技術整理，不混新功能。把未完成項留在「已完
 
 ---
 
+## DEC-032 FinanceHub 加密格式 v1
+
+- 日期：2026-07-29
+- 狀態：已確認
+- 對應：S3-10
+
+### 適用範圍
+
+本決策只定義加密格式，不建立 metadata sidecar、不啟用資料庫加密，也不實作金鑰導出。規格確認後，S3-11 之後的工作才可依此實作。
+
+### 七項固定規格
+
+| 項目 | v1 規格 |
+|---|---|
+| 格式版本 | `formatVersion = 1` |
+| KDF 版本 | `kdfVersion = 1` |
+| KDF | `scrypt` |
+| KDF 參數 | `N = 262144 (2^18)`、`r = 8`、`p = 1`、`keyLength = 32 bytes`、`maxmem = 536870912 bytes (512 MiB)` |
+| salt | 每個資料庫各自使用 CSPRNG 產生 `32 bytes`；sidecar 以有 padding 的標準 Base64 保存 |
+| cipher | 明確指定 SQLite3 Multiple Ciphers 的 `chacha20`（sqleet ChaCha20-Poly1305），`legacy = 0`、`plaintextHeaderSize = 0`、`hmacCheck = 1`、`keyMode = raw` |
+| cipher page size | `4096 bytes` |
+| 密碼編碼 | 不 trim；先做 Unicode `NFC` 正規化，再編碼為 UTF-8 |
+
+格式 v1 的密碼技術限制為：正規化後不得為空、最多 1024 個 Unicode scalar values，且 UTF-8 結果最多 4096 bytes。產品層日後可以要求更高的最低強度，但不得放寬這兩個格式上限，也不得改變既有格式版本的正規化與編碼方式。
+
+產品層的 v1 密碼規則為：
+
+- 至少 8 個 Unicode scalar values。
+- 不強制大小寫、數字、符號或特定字元種類。
+- S3-20 必須顯示「建議使用多個不相關詞組成的密語」或語意等同的引導文字。
+
+8 字元只是最低可接受門檻，不代表 8 字元密碼足以抵抗離線破解。攻擊者取得資料庫與 sidecar 後可以離線猜測；常見、可預測或重複使用的弱密碼即使經過 scrypt 仍可能被破解。繼續提高 KDF 成本會同步增加正常使用者的解鎖等待與記憶體壓力，邊際效益有限；增加不可預測的密碼長度才是更有效的改善方式。因此 FinanceHub 採「鼓勵較長密語、不強制複雜度」：避免使用者為符合字元規則形成可預測模式，也避免日後被誤改為強制大小寫／數字符號的規則。
+
+### KDF 參數選擇理由
+
+#### `N = 262144 (2^18)`
+
+- OWASP 對 scrypt 的目前最低建議是 `N = 2^17`、`r = 8`、`p = 1`。FinanceHub v1 提高一級到 `2^18`，增加離線猜密碼的 CPU 與記憶體成本。
+- scrypt 的主要記憶體成本約為 `128 × N × r`，本設定約為 256 MiB。
+- 2026-07-29 在目標開發機（Intel Core Ultra 7 265K、32 GB RAM、Node.js 24.15.0、Windows x64）以相同密碼、16-byte 固定測試 salt、`r = 8`、`p = 1`、`keyLength = 32` 各暖機一次後測量五次：
+
+| N | 估計記憶體 | 五次範圍 | 中位數 |
+|---|---:|---:|---:|
+| `2^16` | 64 MiB | 90.4–91.5 ms | 90.9 ms |
+| `2^17` | 128 MiB | 179.8–184.3 ms | 180.6 ms |
+| `2^18` | 256 MiB | 368.4–382.8 ms | 370.5 ms |
+
+約 371 ms 的導出只在建立或解鎖資料庫時執行一次，不在每次查詢執行。它在目標機上仍屬可接受的互動等待，同時不會像 90–180 ms 那麼容易被大量嘗試。低階支援機器仍需在實作驗收時量測；若 v1 在最低支援硬體不可接受，只能在尚未產生正式 v1 資料前修訂本決策，不能讓程式執行時自行降級參數。
+
+#### `r = 8`
+
+採用 OWASP 建議的 block size。它是廣泛使用且已有互通測試基礎的值；任意提高 `r` 會再增加記憶體與時間，卻不如以版本化的 `N` 明確表達成本升級。
+
+#### `p = 1`
+
+桌面解鎖是單次互動工作，不用提高平行化參數來倍增成本。`p = 1` 也符合 OWASP 最低建議，避免在核心數較少的電腦造成不穩定延遲。
+
+#### `keyLength = 32`
+
+輸出 256-bit 主金鑰。格式 v1 再以 HKDF-SHA-256 和不同的固定 `info` 分別導出 32-byte 資料庫金鑰與 32-byte verifier 金鑰，讓兩個用途有明確的 domain separation，不重複使用同一把金鑰：
+
+- 資料庫金鑰：`info = "FinanceHub/database-key/v1"`
+- verifier 金鑰：`info = "FinanceHub/key-verifier-key/v1"`
+
+HKDF 的 salt 使用長度為 0 的 byte sequence；scrypt 已使用每個資料庫獨立的 salt 產生 pseudorandom 主金鑰，HKDF 在此只負責用途分離。
+
+#### `maxmem = 512 MiB`
+
+`maxmem` 是執行上限，不是固定配置量。v1 的估計工作記憶體約 256 MiB；512 MiB 為實作額外配置保留餘裕，同時阻止程式錯誤讓單次導出無上限耗盡記憶體。sidecar 只提供 `kdfVersion`，程式必須用它查詢內建的可信參數表，不接受外部提供的 KDF 參數。
+
+#### 非同步執行
+
+實作必須使用非同步 `scrypt`，不得使用 `scryptSync`。目標機的一次 v1 導出約需 371 ms；若在 Electron main process 同步執行，期間會阻塞事件迴圈，使視窗、IPC 與作業系統事件看起來無回應。非同步執行不降低 KDF 成本，只避免把計算等待轉成介面凍結。
+
+#### salt：32 bytes、CSPRNG
+
+- 每個資料庫獨立產生，避免兩個使用相同密碼的資料庫得到相同主金鑰，也阻止預先計算表重用。
+- 32 bytes 高於計畫要求的至少 16 bytes，碰撞機率可忽略，成本也極低。
+- 必須使用作業系統支援的密碼學安全亂數來源，例如 Node.js `crypto.randomBytes(32)`；不得使用時間、UUID、`Math.random()` 或可預測值。
+- salt 不是秘密，明文放在 sidecar 是格式的一部分。
+
+### cipher 規格與選擇理由
+
+格式 v1 必須逐項套用並驗證以下設定，不能依賴套件預設：
+
+| 參數 | 固定值 | 理由 |
+|---|---|---|
+| `cipher` | `chacha20` | SQLite3 Multiple Ciphers 對新資料庫推薦的現代方案；相較軟體實作的 AES-CBC 通常有較好的跨硬體效能。 |
+| `legacy` | `0` | 新資料庫不使用相容舊格式。 |
+| `keyMode` | `raw` | 傳入從 scrypt 主金鑰經 HKDF-SHA-256 導出的 32-byte 資料庫子金鑰，不再把使用者密碼直接交給 cipher 的 PBKDF2。 |
+| `plaintextHeaderSize` | `0` | 不為平台相容性留下明文資料庫標頭。 |
+| `hmacCheck` | `1` | 讀取時不得關閉 authentication tag 驗證。復原工具若需例外，必須是獨立、明確授權的流程，正式應用不得有開關。 |
+| `pageSize` | `4096` | SQLite 與此 cipher 的標準頁面大小；在小型個人財務資料庫兼顧隨機讀寫與每頁加解密成本。 |
+
+raw key 模式繞過 cipher 內建的 PBKDF2，因此 `kdf_iter` 不參與格式 v1 的金鑰導出；唯一密碼 KDF 是上表固定的 scrypt v1。實作不得在 raw key 失敗時退回 passphrase 模式。
+
+ChaCha20-Poly1305 為每個資料庫頁面從主金鑰、頁碼與 16-byte nonce 導出 one-time key，並為每頁保存 16-byte Poly1305 authentication tag；每頁共保留 32 bytes。這表示它提供 **page 層級的機密性與竄改偵測**，讀取時 tag 不符必須失敗，不得回傳未驗證資料。這能滿足 S3-14 對資料庫 page 的完整性要求，但不保護資料庫外的 metadata sidecar，也不單獨處理整個檔案被回滾成較舊有效版本的情況；sidecar 驗證與備份／回滾風險必須另行處理。
+
+### 密碼轉成 KDF 輸入的唯一流程
+
+1. 接收使用者原始字串；前後空白是密碼內容的一部分，**不得 trim**。
+2. 以 Unicode NFC 正規化。
+3. 以 Unicode scalar values 計數：不得為空，最多 1024 個。
+4. 以 UTF-8 編碼；結果最多 4096 bytes。
+5. 將 UTF-8 bytes 與 sidecar 的 32-byte salt 交給 `scrypt v1`，得到 32-byte 主金鑰。
+6. 依固定 HKDF-SHA-256 `info` 分別導出資料庫與 verifier 子金鑰。
+7. 原始字串、正規化字串、UTF-8 bytes、主金鑰與兩把子金鑰都不得寫入 log、sidecar、資料庫或錯誤訊息。
+
+先 NFC 再 UTF-8 可讓視覺相同但原本分解方式不同的文字得到同一組 bytes。上限同時限制 Unicode scalar values 與 bytes，避免 JavaScript UTF-16 code unit、組合字元及多 byte 字元造成跨實作歧義。
+
+### Metadata sidecar v1
+
+- 固定檔名：`financehub.db.metadata.json`
+- 與 `financehub.db` 位於同一目錄。
+- 格式：UTF-8 JSON、無 BOM、LF 換行、檔案結尾一個 LF。
+- JSON 根節點必須是 object；所有欄位必須存在，未知欄位一律拒絕，避免舊程式忽略新格式的重要安全語意。
+- 數字欄位使用 JSON number；版本必須是正整數。
+- sidecar 是不可信輸入。程式必須先以固定大小上限讀取，再驗證 schema；只能用其版本編號查詢內建可信表，不得從 sidecar 接受成本參數。
+
+實際檔案結構如下。範例值是假資料；`salt.value` 與 `keyVerifier.value` 解碼後都必須恰好 32 bytes。sidecar 只宣告版本，不保存算法名稱、KDF 成本或 cipher 參數：
+
+```json
+{
+  "formatVersion": 1,
+  "kdfVersion": 1,
+  "salt": {
+    "encoding": "base64",
+    "value": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
+  },
+  "keyVerifier": {
+    "version": 1,
+    "algorithm": "HMAC-SHA-256",
+    "encoding": "base64",
+    "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+  }
+}
+```
+
+程式必須以內建的 `(formatVersion, kdfVersion)` 可信規格表取得算法、完整 KDF 參數、密碼編碼規則、cipher 與 page size。sidecar 不提供可被攻擊者調低的成本參數；版本未知或不支援時只能明確報錯並停止，不得猜測、降級或採用替代值。
+
+`keyVerifier v1` 固定為：
+
+1. 使用上述 verifier 子金鑰。
+2. 對 UTF-8 固定訊息 `FinanceHub/key-verifier/v1` 計算 HMAC-SHA-256。
+3. 將 32-byte結果以有 padding 的標準 Base64 存入 `value`。
+4. 驗證時必須採 constant-time comparison。
+
+這裡只為了讓 sidecar v1 的實際欄位與格式沒有未定值；產生、驗證、錯誤分類與測試仍屬 S3-12，本項不實作。
+
+### 兩種不可復原的情況
+
+以下兩種情況具有同等嚴重性，FinanceHub 都沒有後門或替代解鎖方式：
+
+1. **忘記主密碼。** 無法重新導出正確金鑰，資料永久無法解密。
+2. **遺失或損壞 metadata sidecar。** scrypt salt 只存在 `financehub.db.metadata.json`；沒有原始 32-byte salt，即使記得完全正確的主密碼也無法重新導出同一把金鑰，資料同樣永久無法解密。重新產生 salt、猜測 salt 或建立新的 sidecar 都不能復原原資料。
+
+因此資料庫與 sidecar 是不可分割的備份單位。S3-20 的設定密碼警告必須同時明確說明「忘記密碼」與「遺失 metadata」都會造成永久資料遺失；S3-32 的 README 備份／還原說明也必須涵蓋相同警告，並要求每次備份同時保存 `financehub.db` 與 `financehub.db.metadata.json`。不得只用「請妥善保管」等模糊文字帶過。
+
+### 格式與 KDF 的演進規則
+
+1. `formatVersion` 管理 sidecar 結構、密碼編碼規則、cipher、page size、key mode 等整體格式；任一項改變都建立新的 format version。
+2. `kdfVersion` 管理 KDF 算法與完整參數組。提高 `N`、改 `r/p/keyLength/maxmem` 或更換算法都必須新增 KDF 版本，禁止修改既有版本定義。
+3. 新版程式內保留所有仍支援的 KDF version registry。開啟既有資料庫時，讀取其版本並選擇該版本的固定參數；**既有資料庫永遠繼續使用建立時的版本**。
+4. 建立新資料庫只使用當時最新的 format 與 KDF 版本。
+5. sidecar 的格式或 KDF 版本高於程式支援範圍、版本未知或 schema 不符時，明確報錯並停止；不得猜測、降級、改寫或嘗試所有版本。
+6. 新增 KDF 版本的流程必須包含：決策紀錄、目標與最低支援硬體 benchmark、已知向量測試、舊版本開啟測試，以及新的固定假資料相容性 fixture。
+7. 單純升級應用程式不得偷偷把既有資料庫換成新 KDF。若未來要升級既有資料庫，必須由使用者明確觸發，以已驗證的舊密碼解鎖後，建立新 salt、以新版本重新導出金鑰，透過原子遷移／重加密流程成功完成後才替換舊檔；失敗時原資料庫與 sidecar 必須保持可用。
+8. 只有在確認所有使用該舊版本的資料都已安全遷移，且產品提供明確的淘汰與復原方案後，才能停止支援舊 KDF 版本。
+
+### 規格依據
+
+- OWASP Password Storage Cheat Sheet：scrypt 最低建議為 `N = 2^17`、`r = 8`、`p = 1`。
+- SQLite3 Multiple Ciphers 官方文件：推薦 `chacha20`；每頁使用 nonce 與 Poly1305 authentication tag，並支援 raw 32-byte key。
+- SQLite3 Multiple Ciphers 官方文件：`hmac_check` 預設可被關閉，因此 FinanceHub 必須明確固定為啟用，不能依賴預設。
+
+---
+
 ## Migration 歷史例外與紀律
 
 - Migration 4 同時包含 schema 變更與預設分類寫入，為技術架構規範建立前的歷史例外，保留原狀，不得修改或拆解。
