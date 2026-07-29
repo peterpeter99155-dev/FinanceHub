@@ -1,4 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import {
+  ERROR_CODES,
+  FinanceHubError,
+} from '../shared/errors';
 
 import {
   DATA_STATUSES,
@@ -19,6 +23,7 @@ import type {
 import { FINANCIAL_ITEM_TYPE_LABELS } from '../shared/financial-item-labels';
 import type { FinancialItemCustomTypeRepository } from './ports/financial-item-custom-type-repository';
 import type { FinancialItemRepository } from './ports/financial-item-repository';
+import type { TransactionRepository } from './ports/transaction-repository';
 
 export class FinancialItemService {
   constructor(
@@ -26,6 +31,7 @@ export class FinancialItemService {
     private readonly createId: () => string = randomUUID,
     private readonly now: () => string = () => new Date().toISOString(),
     private readonly customTypeRepository?: FinancialItemCustomTypeRepository,
+    private readonly transactions?: TransactionRepository,
   ) {}
 
   list(): FinancialItemSnapshot {
@@ -68,7 +74,7 @@ export class FinancialItemService {
   delete(idInput: unknown): FinancialItemSnapshot {
     const id = parseId(idInput);
 
-    if (this.repository.countTransactions(id) > 0) {
+    if ((this.transactions?.countByAccountId(id) ?? 0) > 0) {
       throw new Error(
         'Financial item cannot be deleted because it has transaction history.',
       );
@@ -154,11 +160,17 @@ function parseDraft(input: unknown): FinancialItemDraft {
   const amount = createTwdAmount(input.amount);
 
   if (amount === 0) {
-    throw new Error('Amount must be greater than zero.');
+    throw new FinanceHubError(
+      ERROR_CODES.amountMustBePositive,
+      'Amount must be greater than zero.',
+    );
   }
 
   if (amount > MAX_FINANCIAL_ITEM_AMOUNT_TWD) {
-    throw new Error('Amount exceeds the allowed maximum.');
+    throw new FinanceHubError(
+      ERROR_CODES.amountOutOfRange,
+      'Amount exceeds the allowed maximum.',
+    );
   }
 
   if (typeof input.includeInNetWorth !== 'boolean') {

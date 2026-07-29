@@ -1,4 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite';
+import {
+  ERROR_CODES,
+  FinanceHubError,
+} from '../../shared/errors';
 
 import type { FinancialItemCustomTypeRepository } from '../../application/ports/financial-item-custom-type-repository';
 import {
@@ -46,18 +50,6 @@ export class SqliteFinancialItemCustomTypeRepository
     return row ? mapRow(row) : undefined;
   }
 
-  countItems(id: string): number {
-    const row = this.database
-      .prepare(
-        `SELECT COUNT(*) AS count
-         FROM financial_items
-         WHERE custom_type_id = ?`,
-      )
-      .get(id) as { count: number };
-
-    return Number(row.count);
-  }
-
   create(type: FinancialItemCustomType): void {
     validateFinancialItemCustomType(type);
     this.assertUniqueActiveName(type);
@@ -86,25 +78,6 @@ export class SqliteFinancialItemCustomTypeRepository
       );
     }
 
-    if (
-      existing.direction !== type.direction &&
-      this.countItems(type.id) > 0
-    ) {
-      throw new Error(
-        'A used custom type cannot change between asset and liability.',
-      );
-    }
-
-    if (
-      existing.isActive &&
-      !type.isActive &&
-      this.countItems(type.id) > 0
-    ) {
-      throw new Error(
-        'A used custom type cannot be deactivated.',
-      );
-    }
-
     this.assertUniqueActiveName(type);
     this.database
       .prepare(
@@ -121,14 +94,6 @@ export class SqliteFinancialItemCustomTypeRepository
   }
 
   delete(id: string): void {
-    const usageCount = this.countItems(id);
-
-    if (usageCount > 0) {
-      throw new Error(
-        `Financial item custom type is used by ${usageCount} item(s).`,
-      );
-    }
-
     const result = this.database
       .prepare(
         'DELETE FROM financial_item_custom_types WHERE id = ?',
@@ -159,7 +124,8 @@ export class SqliteFinancialItemCustomTypeRepository
     );
 
     if (duplicate) {
-      throw new Error(
+      throw new FinanceHubError(
+        ERROR_CODES.duplicateName,
         'An active custom type with the same name and direction already exists.',
       );
     }

@@ -8,6 +8,7 @@ import {
 } from '../../src/infrastructure/database/bootstrap-database';
 import { SqliteFinancialItemRepository } from '../../src/infrastructure/database/sqlite-financial-item-repository';
 import { SqliteFinancialItemCustomTypeRepository } from '../../src/infrastructure/database/sqlite-financial-item-custom-type-repository';
+import { SqliteTransactionRepository } from '../../src/infrastructure/database/sqlite-transaction-repository';
 
 const ASSET_DRAFT: FinancialItemDraft = {
   name: '示範銀行存款',
@@ -30,6 +31,8 @@ describe('FinancialItemService', () => {
       new SqliteFinancialItemRepository(connection.database),
       () => 'asset-1',
       () => currentTime,
+      undefined,
+      new SqliteTransactionRepository(connection.database),
     );
   });
 
@@ -80,6 +83,7 @@ describe('FinancialItemService', () => {
       () => 'asset-1',
       () => currentTime,
       customTypes,
+      new SqliteTransactionRepository(connection.database),
     );
 
     const snapshot = service.create({
@@ -102,6 +106,8 @@ describe('FinancialItemService', () => {
       new SqliteFinancialItemRepository(connection.database),
       () => `asset-${++idSequence}`,
       () => currentTime,
+      undefined,
+      new SqliteTransactionRepository(connection.database),
     );
 
     service.create(ASSET_DRAFT);

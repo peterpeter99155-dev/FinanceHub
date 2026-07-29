@@ -1,39 +1,93 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
-import { FinanceHubApi, IPC_CHANNELS } from './shared/bootstrap';
-import type { FinancialItemDraft } from './shared/financial-items';
+import {
+  type BootstrapStatus,
+  FinanceHubApi,
+  IPC_CHANNELS,
+} from './shared/bootstrap';
+import type {
+  FinancialItemDraft,
+  FinancialItemSnapshot,
+} from './shared/financial-items';
 import type {
   CategoryDraft,
+  CategoriesApi,
   FinancialItemCustomTypeDraft,
+  FinancialItemCustomTypesApi,
 } from './shared/management';
-import type { TransactionDraft } from './shared/transactions';
+import type {
+  TransactionDraft,
+  TransactionMonthSnapshot,
+} from './shared/transactions';
+import {
+  type IpcResult,
+} from './shared/ipc-result';
+
+async function invoke<T>(
+  channel: string,
+  ...args: readonly unknown[]
+): Promise<T> {
+  const result = (await ipcRenderer.invoke(
+    channel,
+    ...args,
+  )) as IpcResult<T>;
+
+  if (!result.ok) {
+    throw {
+      code: result.code,
+      details: result.details,
+    };
+  }
+
+  return result.value;
+}
 
 const financeHubApi: FinanceHubApi = Object.freeze({
   getBootstrapStatus: () =>
-    ipcRenderer.invoke(IPC_CHANNELS.getBootstrapStatus),
+    invoke<BootstrapStatus>(IPC_CHANNELS.getBootstrapStatus),
   financialItems: Object.freeze({
-    list: () => ipcRenderer.invoke(IPC_CHANNELS.listFinancialItems),
+    list: () =>
+      invoke<FinancialItemSnapshot>(IPC_CHANNELS.listFinancialItems),
     create: (draft: FinancialItemDraft) =>
-      ipcRenderer.invoke(IPC_CHANNELS.createFinancialItem, draft),
+      invoke<FinancialItemSnapshot>(
+        IPC_CHANNELS.createFinancialItem,
+        draft,
+      ),
     update: (id: string, draft: FinancialItemDraft) =>
-      ipcRenderer.invoke(
+      invoke<FinancialItemSnapshot>(
         IPC_CHANNELS.updateFinancialItem,
         id,
         draft,
       ),
     delete: (id: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.deleteFinancialItem, id),
+      invoke<FinancialItemSnapshot>(
+        IPC_CHANNELS.deleteFinancialItem,
+        id,
+      ),
   }),
   categories: Object.freeze({
-    list: () => ipcRenderer.invoke(IPC_CHANNELS.listCategories),
+    list: () =>
+      invoke<Awaited<ReturnType<CategoriesApi['list']>>>(
+        IPC_CHANNELS.listCategories,
+      ),
     create: (draft: CategoryDraft) =>
-      ipcRenderer.invoke(IPC_CHANNELS.createCategory, draft),
+      invoke<Awaited<ReturnType<CategoriesApi['create']>>>(
+        IPC_CHANNELS.createCategory,
+        draft,
+      ),
     update: (id: string, draft: CategoryDraft) =>
-      ipcRenderer.invoke(IPC_CHANNELS.updateCategory, id, draft),
+      invoke<Awaited<ReturnType<CategoriesApi['update']>>>(
+        IPC_CHANNELS.updateCategory,
+        id,
+        draft,
+      ),
     delete: (id: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.deleteCategory, id),
+      invoke<Awaited<ReturnType<CategoriesApi['delete']>>>(
+        IPC_CHANNELS.deleteCategory,
+        id,
+      ),
     reassignAndDelete: (id: string, replacementId: string) =>
-      ipcRenderer.invoke(
+      invoke<Awaited<ReturnType<CategoriesApi['reassignAndDelete']>>>(
         IPC_CHANNELS.reassignAndDeleteCategory,
         id,
         replacementId,
@@ -41,27 +95,35 @@ const financeHubApi: FinanceHubApi = Object.freeze({
   }),
   financialItemCustomTypes: Object.freeze({
     list: () =>
-      ipcRenderer.invoke(IPC_CHANNELS.listFinancialItemCustomTypes),
+      invoke<
+        Awaited<ReturnType<FinancialItemCustomTypesApi['list']>>
+      >(IPC_CHANNELS.listFinancialItemCustomTypes),
     create: (draft: FinancialItemCustomTypeDraft) =>
-      ipcRenderer.invoke(
+      invoke<
+        Awaited<ReturnType<FinancialItemCustomTypesApi['create']>>
+      >(
         IPC_CHANNELS.createFinancialItemCustomType,
         draft,
       ),
     update: (id: string, draft: FinancialItemCustomTypeDraft) =>
-      ipcRenderer.invoke(
+      invoke<
+        Awaited<ReturnType<FinancialItemCustomTypesApi['update']>>
+      >(
         IPC_CHANNELS.updateFinancialItemCustomType,
         id,
         draft,
       ),
     delete: (id: string) =>
-      ipcRenderer.invoke(
+      invoke<
+        Awaited<ReturnType<FinancialItemCustomTypesApi['delete']>>
+      >(
         IPC_CHANNELS.deleteFinancialItemCustomType,
         id,
       ),
   }),
   transactions: Object.freeze({
     listMonth: (year: number, month: number, offset = 0) =>
-      ipcRenderer.invoke(
+      invoke<TransactionMonthSnapshot>(
         IPC_CHANNELS.listTransactionsByMonth,
         year,
         month,
@@ -72,7 +134,7 @@ const financeHubApi: FinanceHubApi = Object.freeze({
       year: number,
       month: number,
     ) =>
-      ipcRenderer.invoke(
+      invoke<TransactionMonthSnapshot>(
         IPC_CHANNELS.createTransaction,
         draft,
         year,
@@ -84,7 +146,7 @@ const financeHubApi: FinanceHubApi = Object.freeze({
       year: number,
       month: number,
     ) =>
-      ipcRenderer.invoke(
+      invoke<TransactionMonthSnapshot>(
         IPC_CHANNELS.updateTransaction,
         id,
         draft,
@@ -92,7 +154,7 @@ const financeHubApi: FinanceHubApi = Object.freeze({
         month,
       ),
     delete: (id: string, year: number, month: number) =>
-      ipcRenderer.invoke(
+      invoke<TransactionMonthSnapshot>(
         IPC_CHANNELS.deleteTransaction,
         id,
         year,

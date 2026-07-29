@@ -1,4 +1,8 @@
 import type { TwdAmount } from './money';
+import type {
+  TransactionAccount,
+  TransactionAccountKind,
+} from './transaction';
 
 export const MAX_FINANCIAL_ITEM_AMOUNT_TWD = 999_999_999_999;
 
@@ -95,4 +99,34 @@ export function isIncludedInOfficialNetWorth(
     item.includeInNetWorth &&
     item.status !== 'pending_confirmation'
   );
+}
+
+export function toTransactionAccount(
+  item: FinancialItem,
+): TransactionAccount | undefined {
+  const kind = transactionAccountKind(item.type);
+
+  return kind
+    ? {
+        id: item.id,
+        kind,
+        balance: item.amount,
+        isActive: item.isActive,
+      }
+    : undefined;
+}
+
+function transactionAccountKind(
+  type: FinancialItemType,
+): TransactionAccountKind | undefined {
+  switch (type) {
+    case 'bank_deposit':
+      return 'bank';
+    case 'cash':
+      return 'cash';
+    case 'credit_card':
+      return 'credit_card';
+    default:
+      return undefined;
+  }
 }

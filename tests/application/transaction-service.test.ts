@@ -1,16 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { TransactionService } from '../../src/application/transaction-service';
+import type { FinancialItemRepository } from '../../src/application/ports/financial-item-repository';
 import type { FinancialItem } from '../../src/domain/financial-item';
 import { createTwdAmount } from '../../src/domain/money';
-import {
-  BootstrapDatabase,
-  openBootstrapDatabase,
-} from '../../src/infrastructure/database/bootstrap-database';
-import { SqliteCategoryRepository } from '../../src/infrastructure/database/sqlite-category-repository';
-import { SqliteFinancialItemRepository } from '../../src/infrastructure/database/sqlite-financial-item-repository';
-import { SqliteTransactionRepository } from '../../src/infrastructure/database/sqlite-transaction-repository';
 import type { TransactionDraft } from '../../src/shared/transactions';
+import {
+  InMemoryFinanceStore,
+  categoryRepository,
+  financialItemRepository,
+  transactionRepository,
+} from './in-memory-finance-store';
 
 const NOW = '2026-07-28T08:00:00.000Z';
 
@@ -47,13 +47,13 @@ function expenseDraft(
 }
 
 describe('TransactionService', () => {
-  let connection: BootstrapDatabase;
-  let items: SqliteFinancialItemRepository;
+  let store: InMemoryFinanceStore;
+  let items: FinancialItemRepository;
   let service: TransactionService;
 
   beforeEach(() => {
-    connection = openBootstrapDatabase(':memory:');
-    items = new SqliteFinancialItemRepository(connection.database);
+    store = new InMemoryFinanceStore();
+    items = financialItemRepository(store);
     items.create(account());
     items.create(
       account({
@@ -72,16 +72,34 @@ describe('TransactionService', () => {
         amount: createTwdAmount(0),
       }),
     );
+    store.categories.set('income-salary', {
+      id: 'income-salary',
+      kind: 'income',
+      name: '薪資',
+      isBuiltIn: true,
+      isActive: true,
+    });
+    store.categories.set('expense-communication', {
+      id: 'expense-communication',
+      kind: 'expense',
+      name: '通訊',
+      isBuiltIn: true,
+      isActive: true,
+    });
+    store.categories.set('expense-other', {
+      id: 'expense-other',
+      kind: 'expense',
+      name: '其他',
+      isBuiltIn: true,
+      isActive: true,
+    });
     service = new TransactionService(
-      new SqliteTransactionRepository(connection.database),
-      new SqliteCategoryRepository(connection.database),
+      transactionRepository(store),
+      categoryRepository(store),
+      items,
       () => 'transaction-1',
-      () => NOW,
+      { now: () => NOW },
     );
-  });
-
-  afterEach(() => {
-    connection.close();
   });
 
   it('creates an expense and uses its category as the default name', () => {
@@ -111,13 +129,34 @@ describe('TransactionService', () => {
     expect(items.findById('bank-1')?.amount).toBe(100_000);
   });
 
-  it('creates income, transfer, card purchase and card payment with correct totals', () => {
+  it('US-04 records a transfer fee as an ordinary expense', () => {
+    const snapshot = service.create(
+      expenseDraft({
+        amount: 15,
+        categoryId: 'expense-other',
+        name: '轉帳手續費',
+      }),
+      2026,
+      7,
+    );
+
+    expect(snapshot.items[0]).toMatchObject({
+      kind: 'expense',
+      name: '轉帳手續費',
+      amount: 15,
+    });
+    expect(snapshot.summary.totalExpense).toBe(15);
+    expect(items.findById('bank-1')?.amount).toBe(99_985);
+  });
+
+  it('US-01, US-03 and US-05 apply income, transfer and credit card effects', () => {
     let sequence = 0;
     service = new TransactionService(
-      new SqliteTransactionRepository(connection.database),
-      new SqliteCategoryRepository(connection.database),
+      transactionRepository(store),
+      categoryRepository(store),
+      items,
       () => `transaction-${++sequence}`,
-      () => NOW,
+      { now: () => NOW },
     );
 
     service.create(
@@ -172,7 +211,7 @@ describe('TransactionService', () => {
     expect(items.findById('card-1')?.amount).toBe(0);
   });
 
-  it('updates and deletes a transaction while restoring balances', () => {
+  it('US-06 updates and deletes a transaction while restoring balances', () => {
     service.create(expenseDraft(), 2026, 7);
 
     service.update(
@@ -186,6 +225,44 @@ describe('TransactionService', () => {
     const snapshot = service.delete('transaction-1', 2026, 7);
     expect(snapshot.items).toEqual([]);
     expect(items.findById('bank-1')?.amount).toBe(100_000);
+  });
+
+  it('deletes an existing transaction after its account and category become inactive', () => {
+    service.create(expenseDraft(), 2026, 7);
+    const bank = store.items.get('bank-1');
+    const category = store.categories.get('expense-communication');
+    store.items.set('bank-1', { ...bank!, isActive: false });
+    store.categories.set('expense-communication', {
+      ...category!,
+      isActive: false,
+    });
+
+    service.delete('transaction-1', 2026, 7);
+
+    expect(store.items.get('bank-1')?.amount).toBe(100_000);
+    expect(store.transactions.size).toBe(0);
+  });
+
+  it('rolls back balance changes when transaction persistence fails', () => {
+    const repository = transactionRepository(store);
+    service = new TransactionService(
+      {
+        ...repository,
+        create: () => {
+          throw new Error('simulated persistence failure');
+        },
+      },
+      categoryRepository(store),
+      items,
+      () => 'transaction-1',
+      { now: () => NOW },
+    );
+
+    expect(() => service.create(expenseDraft(), 2026, 7)).toThrow(
+      'simulated persistence failure',
+    );
+    expect(store.items.get('bank-1')?.amount).toBe(100_000);
+    expect(store.transactions.size).toBe(0);
   });
 
   it.each([

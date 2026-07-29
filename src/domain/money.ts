@@ -8,11 +8,17 @@ export type TwdAmount = number & {
 
 export function createTwdAmount(value: number): TwdAmount {
   if (!Number.isSafeInteger(value)) {
-    throw new Error('TWD amount must be a safe integer.');
+    throw new FinanceHubError(
+      ERROR_CODES.amountOutOfRange,
+      'TWD amount must be a safe integer.',
+    );
   }
 
   if (value < 0) {
-    throw new Error('TWD amount cannot be negative.');
+    throw new FinanceHubError(
+      ERROR_CODES.amountMustBePositive,
+      'TWD amount cannot be negative.',
+    );
   }
 
   return value as TwdAmount;
@@ -25,10 +31,17 @@ export function addTwdAmounts(
   const result = left + right;
 
   if (!Number.isSafeInteger(result) || result > MAX_TWD_AMOUNT) {
-    throw new Error('TWD amount exceeds the supported range.');
+    throw new FinanceHubError(
+      ERROR_CODES.amountOutOfRange,
+      'TWD amount exceeds the supported range.',
+    );
   }
 
   return createTwdAmount(result);
 }
 
 export const ZERO_TWD = createTwdAmount(0);
+import {
+  ERROR_CODES,
+  FinanceHubError,
+} from '../shared/errors';

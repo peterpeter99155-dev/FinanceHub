@@ -1,6 +1,11 @@
 import type { FinancialCategory } from './category';
+import { financialMonthFromDateTime } from './financial-time';
 import type { TwdAmount } from './money';
 import { createTwdAmount } from './money';
+import {
+  ERROR_CODES,
+  FinanceHubError,
+} from '../shared/errors';
 
 export const MAX_TRANSACTION_AMOUNT_TWD = 999_999_999_999;
 export const MAX_TRANSACTION_NAME_LENGTH = 50;
@@ -131,7 +136,20 @@ export function calculateAccountBalanceEffects(
   options: ValidateTransactionOptions,
 ): readonly AccountBalanceEffect[] {
   validateFinancialTransaction(transaction, options);
+  return computeAccountBalanceEffects(transaction);
+}
 
+export function createTransactionValidationOptions(
+  now: string,
+  accounts: readonly TransactionAccount[],
+  categories: readonly FinancialCategory[],
+): ValidateTransactionOptions {
+  return { now, accounts, categories };
+}
+
+export function computeAccountBalanceEffects(
+  transaction: FinancialTransaction,
+): readonly AccountBalanceEffect[] {
   switch (transaction.kind) {
     case 'income':
       return transaction.destinationAccountId
@@ -177,10 +195,23 @@ export function applyBalanceEffect(
   }
 
   if (nextBalance < 0) {
-    throw new Error('Account balance cannot become negative.');
+    throw new FinanceHubError(
+      ERROR_CODES.negativeAccountBalance,
+      'Account balance cannot become negative.',
+    );
   }
 
   return createTwdAmount(nextBalance);
+}
+
+export function reverseBalanceEffect(
+  effect: AccountBalanceEffect,
+): AccountBalanceEffect {
+  return {
+    ...effect,
+    operation:
+      effect.operation === 'increase' ? 'decrease' : 'increase',
+  };
 }
 
 export function calculateMonthlyTransactionSummary(
@@ -198,23 +229,22 @@ export function calculateMonthlyTransactionSummary(
 
   let totalIncome = 0;
   let totalExpense = 0;
+  const expectedMonth = `${year.toString().padStart(4, '0')}-${month
+    .toString()
+    .padStart(2, '0')}`;
 
   for (const transaction of transactions) {
-    const occurredAt = new Date(transaction.occurredAt);
-
     if (
-      occurredAt.getFullYear() !== year ||
-      occurredAt.getMonth() + 1 !== month
+      financialMonthFromDateTime(transaction.occurredAt) !==
+      expectedMonth
     ) {
       continue;
     }
 
-    if (transaction.kind === 'income') {
+    const cashFlow = transactionCashFlow(transaction.kind);
+    if (cashFlow === 'income') {
       totalIncome = addSafeAmount(totalIncome, transaction.amount);
-    } else if (
-      transaction.kind === 'expense' ||
-      transaction.kind === 'credit_card_purchase'
-    ) {
+    } else if (cashFlow === 'expense') {
       totalExpense = addSafeAmount(totalExpense, transaction.amount);
     }
   }
@@ -230,6 +260,48 @@ export function calculateMonthlyTransactionSummary(
     totalExpense: createTwdAmount(totalExpense),
     balance,
   };
+}
+
+export function calculateTransactionBalance(
+  transactions: readonly FinancialTransaction[],
+): number {
+  let balance = 0;
+
+  for (const transaction of transactions) {
+    const cashFlow = transactionCashFlow(transaction.kind);
+    if (cashFlow === 'income') {
+      balance = addSafeAmount(balance, transaction.amount);
+    } else if (cashFlow === 'expense') {
+      balance = addSafeAmount(balance, -transaction.amount);
+    }
+  }
+
+  return balance;
+}
+
+function transactionCashFlow(
+  kind: TransactionKind,
+): 'income' | 'expense' | 'neutral' {
+  if (kind === 'income') {
+    return 'income';
+  }
+  if (kind === 'expense' || kind === 'credit_card_purchase') {
+    return 'expense';
+  }
+  return 'neutral';
+}
+
+export function hasInsufficientAccountBalance(
+  kind: TransactionKind,
+  amount: number,
+  account: TransactionAccount | undefined,
+): boolean {
+  return (
+    kind === 'expense' &&
+    account !== undefined &&
+    Number.isSafeInteger(amount) &&
+    amount > account.balance
+  );
 }
 
 function validateCommonFields(
@@ -266,7 +338,10 @@ function validateCommonFields(
   parseDateTime(transaction.updatedAt, 'updatedAt');
 
   if (occurredAt.getTime() > currentTime.getTime()) {
-    throw new Error('Transaction occurredAt cannot be in the future.');
+    throw new FinanceHubError(
+      ERROR_CODES.futureTransaction,
+      'Transaction occurredAt cannot be in the future.',
+    );
   }
 }
 
@@ -281,11 +356,17 @@ function findAccount(
   const account = accounts.find((candidate) => candidate.id === id);
 
   if (!account) {
-    throw new Error(`Transaction account "${id}" was not found.`);
+    throw new FinanceHubError(
+      ERROR_CODES.invalidAccount,
+      `Transaction account "${id}" was not found.`,
+    );
   }
 
   if (!account.isActive) {
-    throw new Error(`Transaction account "${id}" is inactive.`);
+    throw new FinanceHubError(
+      ERROR_CODES.invalidAccount,
+      `Transaction account "${id}" is inactive.`,
+    );
   }
 
   return account;
@@ -302,11 +383,17 @@ function findCategory(
   const category = categories.find((candidate) => candidate.id === id);
 
   if (!category) {
-    throw new Error(`Transaction category "${id}" was not found.`);
+    throw new FinanceHubError(
+      ERROR_CODES.invalidCategory,
+      `Transaction category "${id}" was not found.`,
+    );
   }
 
   if (!category.isActive) {
-    throw new Error(`Transaction category "${id}" is inactive.`);
+    throw new FinanceHubError(
+      ERROR_CODES.invalidCategory,
+      `Transaction category "${id}" is inactive.`,
+    );
   }
 
   return category;
@@ -317,7 +404,10 @@ function assertAssetAccount(
   field: string,
 ): asserts account is TransactionAccount {
   if (!account || account.kind === 'credit_card') {
-    throw new Error(`${field} must be an active asset account.`);
+    throw new FinanceHubError(
+      ERROR_CODES.invalidAccount,
+      `${field} must be an active asset account.`,
+    );
   }
 }
 
@@ -326,7 +416,10 @@ function assertCreditCard(
   field: string,
 ): asserts account is TransactionAccount {
   if (!account || account.kind !== 'credit_card') {
-    throw new Error(`${field} must be an active credit card account.`);
+    throw new FinanceHubError(
+      ERROR_CODES.invalidAccount,
+      `${field} must be an active credit card account.`,
+    );
   }
 }
 
@@ -344,7 +437,10 @@ function assertCategory(
   kind: FinancialCategory['kind'],
 ): asserts category is FinancialCategory {
   if (!category || category.kind !== kind) {
-    throw new Error(`Transaction requires an active ${kind} category.`);
+    throw new FinanceHubError(
+      ERROR_CODES.invalidCategory,
+      `Transaction requires an active ${kind} category.`,
+    );
   }
 }
 
@@ -408,7 +504,7 @@ function parseDateTime(value: string, field: string): Date {
   return new Date(timestamp);
 }
 
-function addSafeAmount(left: number, right: TwdAmount): number {
+function addSafeAmount(left: number, right: number): number {
   const result = left + right;
 
   if (!Number.isSafeInteger(result)) {

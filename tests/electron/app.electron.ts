@@ -27,6 +27,25 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     application = await launchApplication(userDataDirectory);
     let page = await application.firstWindow();
 
+    const ipcError = await page.evaluate(async () => {
+      try {
+        await window.financeHub.financialItems.create({
+          name: 'IPC error probe',
+          direction: 'asset',
+          type: 'cash',
+          amount: 0,
+          status: 'confirmed',
+          includeInNetWorth: true,
+        });
+        return undefined;
+      } catch (error) {
+        return error;
+      }
+    });
+    expect(ipcError).toMatchObject({
+      code: 'AMOUNT_MUST_BE_POSITIVE',
+    });
+
     await expect(page.getByTestId('net-worth')).toContainText('TWD 0');
     await expect(page.getByTestId('summary-equation')).toContainText(
       '淨資產',
@@ -52,9 +71,13 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     );
     await page.getByTestId('advanced-settings').locator('summary').click();
     await expect(page.getByText('列入我的資產')).toBeVisible();
-    await page.getByRole('button', { name: '負債' }).click();
+    await page
+      .getByRole('button', { name: '負債', exact: true })
+      .click();
     await expect(page.getByText('列入我的負債')).toBeVisible();
-    await page.getByRole('button', { name: '資產' }).click();
+    await page
+      .getByRole('button', { name: '資產', exact: true })
+      .click();
     await page.getByTestId('advanced-settings').locator('summary').click();
     await page.getByTestId('item-amount').fill('0');
     await expect(page.getByTestId('save-item')).toBeDisabled();
@@ -111,11 +134,23 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
       .locator('..')
       .locator('..');
     await mortgageRow.getByRole('button', { name: '編輯' }).click();
+    await expect(page.getByTestId('item-amount')).toHaveValue('5000000');
+    await expect(page.getByTestId('item-name')).toBeFocused();
     await page.getByTestId('item-amount').fill('4900000');
+    await expect(page.getByTestId('item-amount')).toBeFocused();
+    await expect(page.getByTestId('item-name')).toHaveValue('示範房貸');
     await page.getByTestId('save-item').click();
 
     await expect(page.getByTestId('net-worth')).toContainText(
       'TWD 4,100,000',
+    );
+    await expect(
+      page.getByTestId('liability-group').getByText('示範房貸', {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(page.getByTestId('liability-group')).toContainText(
+      'TWD 4,900,000',
     );
 
     await application.close();
@@ -130,6 +165,12 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     ).toBeVisible();
     await expect(page.getByText('示範房產', { exact: true })).toBeVisible();
     await expect(page.getByText('示範房貸', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('liability-group')).toContainText(
+      'TWD 4,900,000',
+    );
+    await expect(
+      page.getByText('示範房貸4900000', { exact: true }),
+    ).toHaveCount(0);
 
     const propertyRow = page
       .getByText('示範房產', { exact: true })
@@ -168,7 +209,7 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
       }),
     ).toBeVisible();
 
-    await page.getByRole('button', { name: '＋新增類型' }).click();
+    await page.locator('.form-panel .inline-action').click();
     const managementDialog = page.getByRole('dialog', {
       name: '管理類型與分類',
     });
@@ -219,7 +260,10 @@ async function createItem(
   },
 ): Promise<void> {
   if (input.direction === '負債') {
-    await page.getByRole('button', { name: '負債' }).click();
+    await page
+      .getByRole('button', { name: '負債', exact: true })
+      .click();
+    await expect(page.getByTestId('item-type')).toHaveValue('mortgage');
   }
 
   await page.getByTestId('item-name').fill(input.name);

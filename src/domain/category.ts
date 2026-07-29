@@ -68,7 +68,8 @@ export function assertUniqueActiveCategoryName(
   );
 
   if (hasDuplicate) {
-    throw new Error(
+    throw new FinanceHubError(
+      ERROR_CODES.duplicateName,
       'An active category with the same name and kind already exists.',
     );
   }
@@ -77,3 +78,7 @@ export function assertUniqueActiveCategoryName(
 function normalizeCategoryName(name: string): string {
   return name.trim().toLocaleLowerCase('zh-TW');
 }
+import {
+  ERROR_CODES,
+  FinanceHubError,
+} from '../shared/errors';

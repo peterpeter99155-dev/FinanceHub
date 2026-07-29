@@ -4,26 +4,15 @@ import type {
   TransactionPage,
   TransactionRepository,
 } from '../../application/ports/transaction-repository';
-import type { FinancialCategory } from '../../domain/category';
-import {
-  FinancialItem,
-  FinancialItemType,
-} from '../../domain/financial-item';
+import { financialMonthFromDateTime } from '../../domain/financial-time';
 import { createTwdAmount } from '../../domain/money';
 import {
   TRANSACTION_KINDS,
-  AccountBalanceEffect,
   FinancialTransaction,
   MonthlyTransactionSummary,
-  TransactionAccount,
-  TransactionAccountKind,
   TransactionKind,
-  applyBalanceEffect,
-  calculateAccountBalanceEffects,
   calculateMonthlyTransactionSummary,
 } from '../../domain/transaction';
-import { SqliteCategoryRepository } from './sqlite-category-repository';
-import { SqliteFinancialItemRepository } from './sqlite-financial-item-repository';
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 50;
@@ -45,12 +34,19 @@ interface TransactionRow {
 export class SqliteTransactionRepository
   implements TransactionRepository
 {
-  private readonly financialItems: SqliteFinancialItemRepository;
-  private readonly categories: SqliteCategoryRepository;
+  constructor(private readonly database: DatabaseSync) {}
 
-  constructor(private readonly database: DatabaseSync) {
-    this.financialItems = new SqliteFinancialItemRepository(database);
-    this.categories = new SqliteCategoryRepository(database);
+  runInTransaction<T>(operation: () => T): T {
+    this.database.exec('BEGIN IMMEDIATE;');
+
+    try {
+      const result = operation();
+      this.database.exec('COMMIT;');
+      return result;
+    } catch (error) {
+      this.database.exec('ROLLBACK;');
+      throw error;
+    }
   }
 
   findById(id: string): FinancialTransaction | undefined {
@@ -118,44 +114,45 @@ export class SqliteTransactionRepository
   }
 
   create(transaction: FinancialTransaction): void {
-    this.inTransaction(() => {
-      const options = this.validationOptions(transaction, false);
-      const effects = calculateAccountBalanceEffects(
-        transaction,
-        options,
-      );
+    this.insert(transaction);
+  }
 
-      this.applyEffects(effects, transaction.updatedAt);
-      this.insert(transaction);
-    });
+  countByCategoryId(id: string): number {
+    const row = this.database
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM financial_transactions
+         WHERE category_id = ?`,
+      )
+      .get(id) as { count: number };
+
+    return Number(row.count);
+  }
+
+  countByAccountId(id: string): number {
+    const row = this.database
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM financial_transactions
+         WHERE source_account_id = ? OR destination_account_id = ?`,
+      )
+      .get(id, id) as { count: number };
+
+    return Number(row.count);
+  }
+
+  reassignCategory(id: string, replacementId: string): void {
+    this.database
+      .prepare(
+        `UPDATE financial_transactions
+         SET category_id = ?
+         WHERE category_id = ?`,
+      )
+      .run(replacementId, id);
   }
 
   update(transaction: FinancialTransaction): void {
-    this.inTransaction(() => {
-      const existing = this.findById(transaction.id);
-
-      if (!existing) {
-        throw new Error(
-          `Financial transaction "${transaction.id}" was not found.`,
-        );
-      }
-
-      const oldEffects = calculateAccountBalanceEffects(
-        existing,
-        this.validationOptions(existing, true),
-      );
-      this.applyEffects(
-        oldEffects.map(reverseEffect),
-        transaction.updatedAt,
-      );
-
-      const newEffects = calculateAccountBalanceEffects(
-        transaction,
-        this.validationOptions(transaction, false),
-      );
-      this.applyEffects(newEffects, transaction.updatedAt);
-
-      const result = this.database
+    const result = this.database
         .prepare(
           `UPDATE financial_transactions
            SET kind = ?, amount = ?, occurred_at = ?,
@@ -168,7 +165,7 @@ export class SqliteTransactionRepository
           transaction.kind,
           transaction.amount,
           transaction.occurredAt,
-          financialMonthFromDate(transaction.occurredAt),
+          financialMonthFromDateTime(transaction.occurredAt),
           transaction.sourceAccountId ?? null,
           transaction.destinationAccountId ?? null,
           transaction.categoryId ?? null,
@@ -178,36 +175,21 @@ export class SqliteTransactionRepository
           transaction.id,
         );
 
-      if (Number(result.changes) !== 1) {
-        throw new Error(
-          `Financial transaction "${transaction.id}" was not found.`,
-        );
-      }
-    });
+    if (Number(result.changes) !== 1) {
+      throw new Error(
+        `Financial transaction "${transaction.id}" was not found.`,
+      );
+    }
   }
 
-  delete(id: string, updatedAt: string): void {
-    this.inTransaction(() => {
-      const existing = this.findById(id);
-
-      if (!existing) {
-        throw new Error(`Financial transaction "${id}" was not found.`);
-      }
-
-      const effects = calculateAccountBalanceEffects(
-        existing,
-        this.validationOptions(existing, true),
-      );
-      this.applyEffects(effects.map(reverseEffect), updatedAt);
-
-      const result = this.database
+  delete(id: string): void {
+    const result = this.database
         .prepare('DELETE FROM financial_transactions WHERE id = ?')
         .run(id);
 
-      if (Number(result.changes) !== 1) {
-        throw new Error(`Financial transaction "${id}" was not found.`);
-      }
-    });
+    if (Number(result.changes) !== 1) {
+      throw new Error(`Financial transaction "${id}" was not found.`);
+    }
   }
 
   private insert(transaction: FinancialTransaction): void {
@@ -224,7 +206,7 @@ export class SqliteTransactionRepository
         transaction.kind,
         transaction.amount,
         transaction.occurredAt,
-        financialMonthFromDate(transaction.occurredAt),
+        financialMonthFromDateTime(transaction.occurredAt),
         transaction.sourceAccountId ?? null,
         transaction.destinationAccountId ?? null,
         transaction.categoryId ?? null,
@@ -235,120 +217,6 @@ export class SqliteTransactionRepository
       );
   }
 
-  private validationOptions(
-    transaction: FinancialTransaction,
-    allowInactive: boolean,
-  ): {
-    now: string;
-    accounts: readonly TransactionAccount[];
-    categories: readonly FinancialCategory[];
-  } {
-    const accountIds = [
-      transaction.sourceAccountId,
-      transaction.destinationAccountId,
-    ].filter((id): id is string => id !== undefined);
-    const accounts = accountIds.map((id) => {
-      const item = this.financialItems.findById(id);
-
-      if (!item) {
-        throw new Error(`Transaction account "${id}" was not found.`);
-      }
-
-      return mapFinancialItemToAccount(item, allowInactive);
-    });
-    const categories = transaction.categoryId
-      ? [this.requireCategory(transaction.categoryId, allowInactive)]
-      : [];
-
-    return {
-      now: transaction.updatedAt,
-      accounts,
-      categories,
-    };
-  }
-
-  private requireCategory(
-    id: string,
-    allowInactive: boolean,
-  ): FinancialCategory {
-    const category = this.categories.findById(id);
-
-    if (!category) {
-      throw new Error(`Transaction category "${id}" was not found.`);
-    }
-
-    return allowInactive
-      ? { ...category, isActive: true }
-      : category;
-  }
-
-  private applyEffects(
-    effects: readonly AccountBalanceEffect[],
-    updatedAt: string,
-  ): void {
-    for (const effect of effects) {
-      const item = this.financialItems.findById(effect.accountId);
-
-      if (!item) {
-        throw new Error(
-          `Transaction account "${effect.accountId}" was not found.`,
-        );
-      }
-
-      this.financialItems.update({
-        ...item,
-        amount: applyBalanceEffect(item.amount, effect),
-        updatedAt,
-      });
-    }
-  }
-
-  private inTransaction(operation: () => void): void {
-    this.database.exec('BEGIN IMMEDIATE;');
-
-    try {
-      operation();
-      this.database.exec('COMMIT;');
-    } catch (error) {
-      this.database.exec('ROLLBACK;');
-      throw error;
-    }
-  }
-}
-
-function mapFinancialItemToAccount(
-  item: FinancialItem,
-  allowInactive: boolean,
-): TransactionAccount {
-  const kind = mapAccountKind(item.type);
-
-  if (!kind) {
-    throw new Error(
-      `Financial item "${item.id}" cannot be used for transactions.`,
-    );
-  }
-
-  return {
-    id: item.id,
-    kind,
-    balance: item.amount,
-    isActive: allowInactive ? true : item.isActive,
-  };
-}
-
-function mapAccountKind(
-  type: FinancialItemType,
-): TransactionAccountKind | undefined {
-  switch (type) {
-    case 'bank_deposit':
-      return 'bank';
-    case 'cash':
-      return 'cash';
-    case 'credit_card':
-      return 'credit_card';
-    default:
-      return undefined;
-  }
 }
 
 function mapTransactionRow(row: TransactionRow): FinancialTransaction {
@@ -373,19 +241,6 @@ function selectTransactionColumns(): string {
   return `SELECT id, kind, amount, occurred_at, source_account_id,
                  destination_account_id, category_id, name, note,
                  created_at, updated_at`;
-}
-
-function financialMonthFromDate(value: string): string {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    throw new Error('Transaction occurredAt must be an ISO date-time.');
-  }
-
-  return formatFinancialMonth(
-    date.getFullYear(),
-    date.getMonth() + 1,
-  );
 }
 
 function formatFinancialMonth(year: number, month: number): string {
@@ -416,16 +271,6 @@ function validatePagination(offset: number, limit: number): void {
       `Transaction page limit must be between 1 and ${MAX_PAGE_SIZE}.`,
     );
   }
-}
-
-function reverseEffect(
-  effect: AccountBalanceEffect,
-): AccountBalanceEffect {
-  return {
-    ...effect,
-    operation:
-      effect.operation === 'increase' ? 'decrease' : 'increase',
-  };
 }
 
 function assertMember<T extends string>(

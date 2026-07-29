@@ -8,6 +8,9 @@ import {
   applyBalanceEffect,
   calculateAccountBalanceEffects,
   calculateMonthlyTransactionSummary,
+  calculateTransactionBalance,
+  computeAccountBalanceEffects,
+  hasInsufficientAccountBalance,
   validateFinancialTransaction,
 } from '../../src/domain/transaction';
 
@@ -76,6 +79,72 @@ const OPTIONS = {
 };
 
 describe('financial transaction', () => {
+  it('calculates a financial balance without counting transfers or card payments', () => {
+    expect(
+      calculateTransactionBalance([
+        transaction({
+          kind: 'income',
+          amount: createTwdAmount(1_000),
+        }),
+        transaction({ amount: createTwdAmount(300) }),
+        transaction({
+          kind: 'transfer',
+          amount: createTwdAmount(500),
+        }),
+      ]),
+    ).toBe(700);
+  });
+
+  it.each([
+    ['empty list', [], 0],
+    ['income', [{ kind: 'income', amount: createTwdAmount(100) }], 100],
+    ['expense', [{ kind: 'expense', amount: createTwdAmount(100) }], -100],
+    ['transfer', [{ kind: 'transfer', amount: createTwdAmount(100) }], 0],
+    [
+      'credit card purchase',
+      [{ kind: 'credit_card_purchase', amount: createTwdAmount(100) }],
+      -100,
+    ],
+    [
+      'credit card payment',
+      [{ kind: 'credit_card_payment', amount: createTwdAmount(100) }],
+      0,
+    ],
+  ] as const)(
+    'classifies %s consistently for transaction balances',
+    (_label, overrides, expected) => {
+      expect(
+        calculateTransactionBalance(
+          overrides.map((override, index) =>
+            transaction({ id: `case-${index}`, ...override }),
+          ),
+        ),
+      ).toBe(expected);
+    },
+  );
+
+  it('determines whether an expense would exceed an account balance', () => {
+    expect(
+      hasInsufficientAccountBalance('expense', 100_001, ACCOUNTS[0]),
+    ).toBe(true);
+    expect(
+      hasInsufficientAccountBalance('expense', 100_000, ACCOUNTS[0]),
+    ).toBe(false);
+    expect(
+      hasInsufficientAccountBalance('income', 100_001, ACCOUNTS[0]),
+    ).toBe(false);
+  });
+
+  it('computes effects for an existing transaction without revalidation', () => {
+    expect(computeAccountBalanceEffects(transaction())).toEqual([
+      {
+        accountId: 'bank-1',
+        operation: 'decrease',
+        amount: 599,
+      },
+    ]);
+  });
+
   it('increases an asset account for income', () => {
     const input = transaction({
       kind: 'income',
