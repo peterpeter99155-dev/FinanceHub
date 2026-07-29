@@ -135,11 +135,22 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
       .locator('..');
     await mortgageRow.getByRole('button', { name: '編輯' }).click();
     await expect(page.getByTestId('item-amount')).toHaveValue('5000000');
+    await expect(page.getByTestId('item-name')).toBeFocused();
     await page.getByTestId('item-amount').fill('4900000');
+    await expect(page.getByTestId('item-amount')).toBeFocused();
+    await expect(page.getByTestId('item-name')).toHaveValue('示範房貸');
     await page.getByTestId('save-item').click();
 
     await expect(page.getByTestId('net-worth')).toContainText(
       'TWD 4,100,000',
+    );
+    await expect(
+      page.getByTestId('liability-group').getByText('示範房貸', {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(page.getByTestId('liability-group')).toContainText(
+      'TWD 4,900,000',
     );
 
     await application.close();
@@ -154,6 +165,12 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     ).toBeVisible();
     await expect(page.getByText('示範房產', { exact: true })).toBeVisible();
     await expect(page.getByText('示範房貸', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('liability-group')).toContainText(
+      'TWD 4,900,000',
+    );
+    await expect(
+      page.getByText('示範房貸4900000', { exact: true }),
+    ).toHaveCount(0);
 
     const propertyRow = page
       .getByText('示範房產', { exact: true })

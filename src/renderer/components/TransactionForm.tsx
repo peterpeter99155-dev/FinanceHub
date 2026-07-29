@@ -4,6 +4,7 @@ import type {
   RefObject,
   SetStateAction,
 } from 'react';
+import { useLayoutEffect } from 'react';
 
 import type { FinancialCategory } from '../../domain/category';
 import type { FinancialItem } from '../../domain/financial-item';
@@ -52,6 +53,19 @@ export function TransactionForm({
   setDraft: Dispatch<SetStateAction<TransactionFormDraft>>;
   setError: (message: string | null) => void;
 }) {
+  useLayoutEffect(() => {
+    if (!editingId) {
+      return;
+    }
+    formPanelRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
+    formPanelRef.current
+      ?.querySelector<HTMLInputElement>('input, select')
+      ?.focus();
+  }, [editingId, formPanelRef]);
+
   return (
     <section
       className={`panel transaction-form-panel ${

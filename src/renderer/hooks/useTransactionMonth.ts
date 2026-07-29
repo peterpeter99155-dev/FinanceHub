@@ -197,15 +197,6 @@ export function useTransactionMonth({
       note: transaction.note,
     });
     setError(null);
-    window.setTimeout(() => {
-      formPanelRef.current?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      });
-      formPanelRef.current
-        ?.querySelector<HTMLInputElement>('input, select')
-        ?.focus();
-    }, 0);
   }
 
   function resetForm(

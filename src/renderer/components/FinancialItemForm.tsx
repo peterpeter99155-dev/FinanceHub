@@ -4,6 +4,7 @@ import type {
   RefObject,
   SetStateAction,
 } from 'react';
+import { useLayoutEffect } from 'react';
 
 import {
   DATA_STATUSES,
@@ -55,6 +56,17 @@ export function FinancialItemForm({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   setDraft: Dispatch<SetStateAction<FinancialItemFormDraft>>;
 }) {
+  useLayoutEffect(() => {
+    if (editingId) {
+      formPanelRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }
+    window.focus();
+    nameInputRef.current?.focus();
+  }, [editingId, formPanelRef, nameInputRef]);
+
   return (
     <section
       className={`panel form-panel ${editingId ? 'editing' : ''}`}

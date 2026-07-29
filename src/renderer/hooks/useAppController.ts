@@ -131,13 +131,6 @@ export function useAppController() {
       includeInNetWorth: item.includeInNetWorth,
     });
     setActionError(null);
-    window.setTimeout(() => {
-      formPanelRef.current?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      });
-      nameInputRef.current?.focus();
-    }, 0);
   }
 
   async function confirmDeleteItem() {
@@ -203,10 +196,8 @@ export function useAppController() {
   }
 
   function focusNameInput() {
-    window.setTimeout(() => {
-      window.focus();
-      nameInputRef.current?.focus();
-    }, 0);
+    window.focus();
+    nameInputRef.current?.focus();
   }
 
   function showNotification(message: string) {

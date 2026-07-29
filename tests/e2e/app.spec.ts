@@ -137,9 +137,17 @@ test('covers the asset and liability create, edit, and delete flow', async ({
 
   await liabilityRow.getByRole('button').first().click();
   await expect(page.getByTestId('item-amount')).toHaveValue('50000');
+  await expect(page.getByTestId('item-name')).toBeFocused();
   await page.getByTestId('item-amount').fill('40000');
+  await expect(page.getByTestId('item-amount')).toBeFocused();
+  await expect(page.getByTestId('item-name')).toHaveValue(
+    'E2E liability',
+  );
   await page.getByTestId('save-item').click();
   await expectFinancialSummary(page, '103,000', '40,000', '63,000');
+  await expect(liabilityRow).toContainText('E2E liability');
+  await expect(liabilityRow).toContainText('TWD 40,000');
+  await expect(page.getByText('E2E liability40000')).toHaveCount(0);
 
   const assetRow = page.getByTestId('financial-item-item-1');
   await assetRow.getByRole('button').last().click();

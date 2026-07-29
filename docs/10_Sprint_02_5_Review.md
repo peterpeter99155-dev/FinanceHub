@@ -12,7 +12,7 @@
 
 本 Sprint 未新增產品功能，主要目標是補齊 Sprint 01、Sprint 02 的端到端驗收，將財務判斷與 use case 編排移回正確分層，建立穩定的 IPC 錯誤契約，並拆分過大的 renderer 元件。
 
-除 T-05 的資料狀態文案與 T-25 的錯誤訊息外，使用者可見的行為、版面、樣式、焦點及鍵盤操作均維持不變。T-40 的瀏覽器 E2E、package smoke 與 production package 均通過；Electron 整合測試仍可重現一項負債編輯後淨資產未更新的失敗，依計畫列為狀態記錄及已知項目。
+除 T-05 的資料狀態文案與 T-25 的錯誤訊息外，使用者可見的行為、版面、樣式、焦點及鍵盤操作均維持不變。T-40 的瀏覽器 E2E、package smoke 與 production package 均通過。T-40 當時由 Electron 整合測試抓到一項負債編輯後淨資產未更新的失敗；後續確認為 Sprint 01 起即存在的延遲焦點資料錯誤，已在本 Sprint 修正並補上回歸防線。
 
 ## 完成範圍
 
@@ -44,7 +44,7 @@
 ## 過程中發現並修正的既有問題
 
 1. **E2E selector 失效**：Sprint 02 的 selector 已無法對應現有畫面，且當時未真正執行完整 E2E。本 Sprint 重建可執行的瀏覽器驗收。
-2. **Electron 測試競速**：點擊編輯後，測試未等待表單載入既有金額便開始輸入，造成偶發錯誤。兩份測試均補上表單狀態等待。
+2. **Sprint 01 起存在的延遲焦點資料錯誤**：編輯財務項目時，脫離 React 渲染週期的 `setTimeout` 會在使用者開始輸入金額後把焦點搶回名稱欄位。實際失敗案例把 `4900000` 附加到名稱成為「示範房貸4900000」，IPC、回傳 snapshot 與 SQLite 則都保存舊金額 `5000000`，造成淨資產靜默錯誤。這段焦點處理在 T-30 前已存在，T-30 只讓它較容易重現；本 Sprint 建立的 Electron 安全網才首次抓到。修正方式是移除脫離渲染週期的焦點排程，改由表單元件以 `useLayoutEffect` 綁定 `editingId`，並清除同類的 `focusNameInput` 與交易編輯延遲焦點。
 3. **Sprint 02 端到端驗收未實際執行**：原本的短時間 smoke test 只能證明應用程式啟動，不能證明收支流程。本 Sprint 明確分開瀏覽器 E2E、Electron 整合測試與 package smoke。
 4. **測試 mock 手抄財務規則**：原 mock 曾自行計算交易影響、月度統計與可用帳戶。本 Sprint 改為呼叫正式 domain／application 邏輯，mock 只負責假儲存。
 
@@ -64,12 +64,11 @@
 
 ## 未修正的已知項目
 
-1. **Electron 整合測試仍有一項功能失敗**：編輯既有負債金額後，測試預期淨資產為 `TWD 4,100,000`，實際仍為 `TWD 4,000,000`。瀏覽器 E2E 的相同流程通過，因此目前影響集中在 production Electron 整合路徑或其刷新時序。T-40 對 `test:electron` 僅要求記錄狀態，本階段不擴大成修復工作。
-2. **Electron 與 package smoke 仍使用 `--disable-gpu`**：先前 Windows Electron GPU subprocess 曾發生 crash；此參數只處理測試環境啟動，不改變財務規則。
-3. **Electron 測試依賴已建置的 `.webpack` 輸出**：若執行前未重新 package，可能測到舊程式。T-40 已先執行 `npm run package`，但測試腳本尚未自動保證建置新鮮度。
-4. **文案集中採較窄範圍**：共用標籤、交易類型文字及錯誤訊息已移至 `labels/messages`；只出現一次且緊貼版面結構的標題、按鈕及 ARIA 文案仍留在元件。這是 T-30 實作時認為可讀性較佳的設計選擇，但若計畫中的「文案集中」意指所有字面文字，則目前並未完全符合，需由後續確認是否全面搬移。
-5. **帳戶餘額模型仍是 MVP 模型**：尚未改為「期初 + 交易 + 調整」，依計畫留待 Sprint 03 以後先討論。
-6. **Mutation 後仍回傳完整列表**：MVP 規模可接受，暫不進行效能優化。
+1. **Electron 與 package smoke 仍使用 `--disable-gpu`**：先前 Windows Electron GPU subprocess 曾發生 crash；此參數只處理測試環境啟動，不改變財務規則。
+2. **Electron 測試依賴已建置的 `.webpack` 輸出**：若執行前未重新 package，可能測到舊程式。T-40 已先執行 `npm run package`，但測試腳本尚未自動保證建置新鮮度。
+3. **文案集中採較窄範圍**：共用標籤、交易類型文字及錯誤訊息已移至 `labels/messages`；只出現一次且緊貼版面結構的標題、按鈕及 ARIA 文案仍留在元件。這是 T-30 實作時認為可讀性較佳的設計選擇，但若計畫中的「文案集中」意指所有字面文字，則目前並未完全符合，需由後續確認是否全面搬移。
+4. **帳戶餘額模型仍是 MVP 模型**：尚未改為「期初 + 交易 + 調整」，依計畫留待 Sprint 03 以後先討論。
+5. **Mutation 後仍回傳完整列表**：MVP 規模可接受，暫不進行效能優化。
 
 ## T-40 完整驗證
 
@@ -93,6 +92,15 @@
 - `out/make/zip/win32/x64/FinanceHub-win32-x64-0.1.0.zip`
 
 `npm run make` 僅出現 Node.js `DEP0147` 的 `fs.rmdir` 棄用警告，不影響本次產出。
+
+### T-40 後續資料正確性修復驗證
+
+T-40 的 Electron 紅燈經 bisect 與低干擾觀測確認為 Sprint 01 起既有的焦點競速，不是 T-25 IPC 回歸。修正後：
+
+- typecheck、lint 通過。
+- 瀏覽器 E2E 5 項全部通過，並驗證編輯後的焦點、名稱與金額；瀏覽器 mock 環境無法穩定重現舊競速，因此主要阻擋防線仍是 Electron。
+- fresh package 後以單一 worker 連續執行 Electron 測試 15 次，15 次全部通過。
+- 每次 Electron 測試都驗證名稱維持「示範房貸」、金額為 `4,900,000`、淨資產為 `4,100,000`，並在重新開啟應用程式後再次確認持久化結果。
 
 ## T-41 自我審查
 
@@ -181,4 +189,4 @@
 
 ## Sprint 結論
 
-Sprint 2.5 已把 Sprint 01、Sprint 02 的核心財務規則收斂至 domain／application，建立可實際執行的瀏覽器端到端驗收及跨 IPC 錯誤契約，並完成 renderer 結構拆分。可以進入人工確認與合併流程，但合併前仍應知悉 Electron 整合測試的負債刷新失敗，以及「文案集中」範圍需確認的兩項狀態。
+Sprint 2.5 已把 Sprint 01、Sprint 02 的核心財務規則收斂至 domain／application，建立可實際執行的瀏覽器端到端驗收及跨 IPC 錯誤契約，並完成 renderer 結構拆分。新安全網亦抓出並修正一項從 Sprint 01 起存在、會讓金額靜默存錯欄位的資料正確性問題。可以進入人工確認流程；是否合併仍由使用者確認，且「文案集中」範圍仍待確認。
