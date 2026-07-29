@@ -20,7 +20,7 @@
     "test:e2e:build": "webpack --config tests/e2e/webpack.config.cjs",
     "test:e2e": "npm run test:e2e:build && playwright test",
     "test:electron": "playwright test --config playwright.electron.config.ts",
-    "pretest:electron": "npm run prepare:sqlite:electron",
+    "pretest:electron": "npm run package",
     "test:package-smoke": "npm run package && node tests/smoke/package-smoke.cjs",
     "test:watch": "vitest",
     "lint": "eslint ."

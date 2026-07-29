@@ -30,6 +30,7 @@ export const IPC_CHANNELS = {
 export interface BootstrapStatus {
   appName: string;
   databaseReady: boolean;
+  databaseState: 'setup_required' | 'locked' | 'unlocked';
   storagePolicy: 'sample-data-only';
 }
 

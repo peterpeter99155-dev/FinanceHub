@@ -16,9 +16,12 @@ describe('ApplicationController unlock boundary', () => {
     const registry = new FakeIpcRegistry();
     let databaseOpened = false;
     let servicesCreated = false;
+    let databaseClosed = false;
     const connection: BootstrapDatabase = {
       database: {} as SqliteDatabase,
-      close: () => undefined,
+      close: () => {
+        databaseClosed = true;
+      },
     };
     const controller = new ApplicationController(
       'financehub.db',
@@ -51,6 +54,8 @@ describe('ApplicationController unlock boundary', () => {
 
     expect(databaseOpened).toBe(true);
     expect(servicesCreated).toBe(true);
+    controller.close();
+    expect(databaseClosed).toBe(true);
     expect(registry.has(IPC_CHANNELS.listFinancialItems)).toBe(true);
     expect(registry.has(IPC_CHANNELS.unlockDatabase)).toBe(false);
   });

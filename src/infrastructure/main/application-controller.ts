@@ -13,6 +13,10 @@ import { SqliteCategoryRepository } from '../database/sqlite-category-repository
 import { SqliteFinancialItemCustomTypeRepository } from '../database/sqlite-financial-item-custom-type-repository';
 import { SqliteFinancialItemRepository } from '../database/sqlite-financial-item-repository';
 import { SqliteTransactionRepository } from '../database/sqlite-transaction-repository';
+import {
+  databasePaths,
+  inspectDatabaseFiles,
+} from '../security/database-metadata';
 
 export type IpcOperation = (...args: readonly unknown[]) => unknown;
 
@@ -53,11 +57,7 @@ export class ApplicationController {
   registerLockedHandlers(): void {
     this.registry.handle(
       IPC_CHANNELS.getBootstrapStatus,
-      (): BootstrapStatus => ({
-        appName: 'FinanceHub',
-        databaseReady: this.state === 'unlocked',
-        storagePolicy: 'sample-data-only',
-      }),
+      () => this.getBootstrapStatus(),
     );
     this.registry.handle(
       IPC_CHANNELS.unlockDatabase,
@@ -69,6 +69,19 @@ export class ApplicationController {
     this.connection?.close();
     this.connection = undefined;
     this.state = 'locked';
+  }
+
+  private async getBootstrapStatus(): Promise<BootstrapStatus> {
+    if (this.state === 'unlocked') {
+      return bootstrapStatus('unlocked');
+    }
+
+    const fileState = await inspectDatabaseFiles(
+      databasePaths(this.databasePath),
+    );
+    return bootstrapStatus(
+      fileState === 'new' ? 'setup_required' : 'locked',
+    );
   }
 
   private async unlock(password: unknown): Promise<void> {
@@ -103,6 +116,17 @@ export class ApplicationController {
       throw error;
     }
   }
+}
+
+function bootstrapStatus(
+  databaseState: BootstrapStatus['databaseState'],
+): BootstrapStatus {
+  return {
+    appName: 'FinanceHub',
+    databaseReady: databaseState === 'unlocked',
+    databaseState,
+    storagePolicy: 'sample-data-only',
+  };
 }
 
 function createFinancialServices(

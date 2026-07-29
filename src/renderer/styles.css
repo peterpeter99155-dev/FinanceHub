@@ -21,6 +21,100 @@ body {
   min-height: 100vh;
 }
 
+.security-shell {
+  display: grid;
+  min-height: 100vh;
+  padding: 36px;
+  background:
+    radial-gradient(circle at 84% 4%, #dceade 0, transparent 34%),
+    linear-gradient(145deg, #edf3ee, #f8f8f4);
+  place-items: center;
+}
+
+.security-brand {
+  position: fixed;
+  top: 28px;
+  left: 34px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #284936;
+}
+
+.security-brand span {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  color: #fff;
+  background: #315d46;
+  font-family: Georgia, serif;
+  font-size: 0.92rem;
+  place-items: center;
+}
+
+.security-brand strong {
+  font-family: Georgia, "Noto Serif TC", serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.security-card {
+  width: min(520px, calc(100vw - 48px));
+  padding: 38px;
+  border: 1px solid #d8e0da;
+  border-radius: 24px;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 30px 90px rgb(35 59 45 / 13%);
+}
+
+.security-card h1 {
+  margin-bottom: 14px;
+  font-size: clamp(2rem, 4vw, 3rem);
+}
+
+.security-intro,
+.security-fatal > p:last-child {
+  margin-bottom: 26px;
+  color: #607168;
+  line-height: 1.7;
+}
+
+.security-guidance {
+  margin: -4px 0 0;
+  color: #52695c;
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+
+.security-warning {
+  padding: 15px 16px;
+  border: 1px solid #dfc978;
+  border-radius: 12px;
+  color: #624f18;
+  background: #fff8d9;
+}
+
+.security-warning strong {
+  display: block;
+  margin-bottom: 7px;
+}
+
+.security-warning p {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+
+form .security-confirmation {
+  align-items: flex-start;
+  line-height: 1.5;
+}
+
+.security-fatal {
+  border-color: #e4c5c1;
+}
+
 button,
 input,
 select {

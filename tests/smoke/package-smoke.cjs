@@ -26,6 +26,7 @@ const TEST_ONLY_PASSWORDS = [
   'S3 core wrong password only',
   'S3 controller password only',
   'S3 Electron password only',
+  'S3 browser password only',
 ];
 
 async function main() {
