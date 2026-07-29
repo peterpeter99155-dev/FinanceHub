@@ -59,7 +59,7 @@
 | 4 | T-40 完整驗證並附輸出 | ✓ | 本次收尾 commit |
 | 4 | T-41 五問回報 | ✓ | 本次收尾 commit |
 | 4 | T-42 撰寫 Sprint 2.5 Review | ✓ | 本次收尾 commit |
-| — | 合併 sprint-02-5 → main | ○ | |
+| — | 合併 sprint-02-5 → main | ✓ | `c3f02f6` |
 
 ## Sprint Goal
 
