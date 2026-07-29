@@ -2,14 +2,19 @@
 
 ## 文件資訊
 
-- 版本：1.2
+- 版本：1.3
 - 日期：2026-07-28
-- 狀態：待開始
+- 狀態：階段 0 至階段 4 已完成，等待確認後合併
 - 分支：`codex/sprint-02-5`（從 Sprint 02 合併後的 main 開出）
 - 依據文件：`00_Architecture_Rules.md` v1.2、`00_Glossary.md` v1.1、`04_Decision_Log.md`
 - 對應程式狀態：commit `0a628d2`
 
 ### 修訂紀錄
+
+**1.3（2026-07-28）** 實作完成後補入：
+
+- 新增「執行進度」對照表，列出每一項的完成狀態與對應 commit。
+- **新增 T-42 撰寫 Sprint 2.5 Review。** 原計畫遺漏 Sprint Review，與 Sprint 01、Sprint 02 的慣例不一致，此為計畫本身的缺漏。
 
 **1.2（2026-07-28）** 依第二輪審查修正四處：
 
@@ -29,6 +34,32 @@
 - T-26 補上 Migration 4 的歷史例外記錄。
 
 **1.0（2026-07-28）** 初版。
+
+## 執行進度
+
+| 階段 | 項目 | 狀態 | Commit |
+|---|---|---|---|
+| 0 | T-00 換行宣告（未做正規化） | ✓ | `7381914` |
+| 0 | T-05 「類型／分類」文案修正 | ✓ | `7381914` |
+| 0 | T-01 Sprint 02 Review | ✓ | `7381914` |
+| 0 | T-02 文件狀態修正 | ✓ | `7381914` |
+| 0 | T-03 補記 DEC-025～DEC-031 | ✓ | `7381914` |
+| — | 合併 sprint-02 → main，開 sprint-02-5 | ✓ | `87646fb` |
+| 1 | T-10 修好失效 E2E（含改壞驗紅） | ✓ | `aed7f1c` |
+| 1 | T-11 重建 E2E 架構（腳本三分） | ✓ | `aed7f1c` |
+| 1 | 補資產負債流程覆蓋、修正測試競速 | ✓ | `2b850fe` |
+| 2 | T-21 拆開驗證與計算，移除 `allowInactive` | ✓ | `e25acba` |
+| 2 | T-22 單一時鐘與 `Asia/Taipei` 月份 | ✓ | `e25acba` |
+| 2 | T-20 use case 編排移回 application | ✓ | `e25acba` |
+| 2 | T-23 商業政策移至 application | ✓ | `8dba9f0` |
+| 2 | T-24 財務判斷移出 renderer | ✓ | `8dba9f0` |
+| 2 | T-26 migration 紀律（含雜湊固定測試） | ✓ | `8dba9f0` |
+| 2 | T-25 錯誤代碼化與 IPC 序列化 | ✓ | `3cd823d` |
+| 3 | T-30 介面拆分 | ✓ | `9d859bf` |
+| 4 | T-40 完整驗證並附輸出 | ✓ | 本次收尾 commit |
+| 4 | T-41 五問回報 | ✓ | 本次收尾 commit |
+| 4 | T-42 撰寫 Sprint 2.5 Review | ✓ | 本次收尾 commit |
+| — | 合併 sprint-02-5 → main | ○ | |
 
 ## Sprint Goal
 
@@ -516,6 +547,20 @@ error.message.includes('used by')
 
 **第 1 題的額外要求：** 必須明確檢查是否有「自己認為合理、因此沒列出」的設計選擇。Sprint 02 的自我審查漏掉了 `allowInactive`、`updatedAt` 代替 now、錯誤訊息字串比對這三項，共同特徵是它們在當時被認為已解決。
 
+## T-42　撰寫 Sprint 2.5 Review
+
+**本項為 v1.3 補入。** 原計畫遺漏了 Sprint Review，與 Sprint 01（`06_Sprint_01_Review.md`）、Sprint 02（`08_Sprint_02_Review.md`）的慣例不一致。
+
+建立 `docs/10_Sprint_02_5_Review.md`，至少涵蓋：
+
+- 完成範圍：T-00 至 T-30 逐項結果，附對應 commit。
+- 對外行為的兩項預期變更（T-05 文案、T-25 錯誤訊息），確認其餘行為未變。
+- 過程中發現並修正的既有問題：E2E selector 失效、Electron 測試競速、Sprint 02 的端到端驗收未實際執行。
+- 本 Sprint 建立的機械化防線：migration 區塊 SHA-256 固定測試、renderer 禁用字串守門測試。
+- 已決議但移至 Sprint 03 的項目：G-01 電子錢包、G-04 資料狀態、G-05 手續費關聯、G-06 交易篩選與分類重新指派。
+- 未修正的已知項目與理由。
+- 拆分後各檔案行數與 state 數量對照表。
+
 ---
 
 ## Definition of Done
@@ -527,6 +572,7 @@ error.message.includes('used by')
 - `00_Architecture_Rules.md` 第 11 節的結構性完成定義全部符合。
 - typecheck、lint、單元測試、`test:e2e`、`test:package-smoke`、Windows production package 全部通過並附輸出。
 - 回報包含 T-41 的五個問題與額外要求。
+- `docs/10_Sprint_02_5_Review.md` 已完成（T-42）。
 
 ## 不在本 Sprint 範圍
 
