@@ -33,9 +33,11 @@ samples/raw/
 *.sqlite3
 *.sqlcipher
 *.backup
+*.metadata.json
 
 # Fixed, fake encrypted compatibility fixture (safe to commit)
 !tests/fixtures/encryption-v1/financehub-v1.db
+!tests/fixtures/encryption-v1/financehub-v1.db.metadata.json
 
 # Financial source documents
 *.pdf
