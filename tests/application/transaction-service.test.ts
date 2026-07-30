@@ -129,6 +129,72 @@ describe('TransactionService', () => {
     expect(items.findById('bank-1')?.amount).toBe(100_000);
   });
 
+  it('calculates the monthly summary from all items, not only the visible page', () => {
+    for (let index = 0; index < 51; index += 1) {
+      store.transactions.set(`expense-${index}`, {
+        id: `expense-${index}`,
+        kind: 'expense',
+        amount: createTwdAmount(1),
+        occurredAt: `2026-07-28T07:${String(index).padStart(2, '0')}:00.000Z`,
+        categoryId: 'expense-communication',
+        name: '通訊',
+        note: '',
+        createdAt: NOW,
+        updatedAt: NOW,
+      });
+    }
+
+    const snapshot = service.listMonth(2026, 7);
+
+    expect(snapshot.items).toHaveLength(50);
+    expect(snapshot.totalCount).toBe(51);
+    expect(snapshot.summary).toEqual({
+      totalIncome: 0,
+      totalExpense: 51,
+      balance: -51,
+    });
+  });
+
+  it('passes the canonical Asia/Taipei month to persistence on create and update', () => {
+    const repository = transactionRepository(store);
+    const persistedMonths: string[] = [];
+    service = new TransactionService(
+      {
+        ...repository,
+        create: (transaction, financialMonth) => {
+          persistedMonths.push(financialMonth);
+          repository.create(transaction);
+        },
+        update: (transaction, financialMonth) => {
+          persistedMonths.push(financialMonth);
+          repository.update(transaction);
+        },
+      },
+      categoryRepository(store),
+      items,
+      () => 'transaction-1',
+      { now: () => '2026-09-02T00:00:00.000Z' },
+    );
+
+    service.create(
+      expenseDraft({
+        occurredAt: '2026-07-31T16:30:00.000Z',
+      }),
+      2026,
+      8,
+    );
+    service.update(
+      'transaction-1',
+      expenseDraft({
+        occurredAt: '2026-08-31T16:30:00.000Z',
+      }),
+      2026,
+      9,
+    );
+
+    expect(persistedMonths).toEqual(['2026-08', '2026-09']);
+  });
+
   it('US-04 records a transfer fee as an ordinary expense', () => {
     const snapshot = service.create(
       expenseDraft({

@@ -9,10 +9,7 @@ import type { FinancialCategory } from '../../src/domain/category';
 import { financialMonthFromDateTime } from '../../src/domain/financial-time';
 import type { FinancialItem } from '../../src/domain/financial-item';
 import type { FinancialItemCustomType } from '../../src/domain/financial-item-custom-type';
-import {
-  FinancialTransaction,
-  calculateMonthlyTransactionSummary,
-} from '../../src/domain/transaction';
+import type { FinancialTransaction } from '../../src/domain/transaction';
 
 export class InMemoryFinanceStore {
   readonly transactions = new Map<string, FinancialTransaction>();
@@ -58,12 +55,13 @@ export class InMemoryFinanceStore {
     };
   }
 
-  summarizeMonth(year: number, month: number) {
-    return calculateMonthlyTransactionSummary(
-      [...this.transactions.values()],
+  listAllByMonth(year: number, month: number) {
+    return this.listByMonth(
       year,
       month,
-    );
+      0,
+      Number.MAX_SAFE_INTEGER,
+    ).items;
   }
 
   countTransactions(id: string): number {
@@ -82,7 +80,7 @@ export function transactionRepository(store: InMemoryFinanceStore) {
     runInTransaction: store.runInTransaction.bind(store),
     findById: (id: string) => store.transactions.get(id),
     listByMonth: store.listByMonth.bind(store),
-    summarizeMonth: store.summarizeMonth.bind(store),
+    listAllByMonth: store.listAllByMonth.bind(store),
     countByCategoryId: (id: string) =>
       [...store.transactions.values()].filter(
         (transaction) => transaction.categoryId === id,

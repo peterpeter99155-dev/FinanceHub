@@ -19,11 +19,13 @@ import {
   TransactionKind,
   applyBalanceEffect,
   calculateAccountBalanceEffects,
+  calculateMonthlyTransactionSummary,
   computeAccountBalanceEffects,
   createTransactionValidationOptions,
   reverseBalanceEffect,
 } from '../domain/transaction';
 import { createTwdAmount } from '../domain/money';
+import { financialMonthFromDateTime } from '../domain/financial-time';
 import type {
   TransactionDraft,
   TransactionMonthSnapshot,
@@ -58,7 +60,11 @@ export class TransactionService {
       year,
       month,
       ...page,
-      summary: this.repository.summarizeMonth(year, month),
+      summary: calculateMonthlyTransactionSummary(
+        this.repository.listAllByMonth(year, month),
+        year,
+        month,
+      ),
     };
   }
 
@@ -85,7 +91,10 @@ export class TransactionService {
         ),
         now,
       );
-      this.repository.create(transaction);
+      this.repository.create(
+        transaction,
+        financialMonthFromDateTime(transaction.occurredAt),
+      );
     });
     return this.listMonth(yearInput, monthInput);
   }
@@ -124,7 +133,10 @@ export class TransactionService {
         ),
         now,
       );
-      this.repository.update(replacement);
+      this.repository.update(
+        replacement,
+        financialMonthFromDateTime(replacement.occurredAt),
+      );
     });
     return this.listMonth(yearInput, monthInput);
   }

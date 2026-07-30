@@ -2,134 +2,29 @@ import {
   app,
   BrowserWindow,
   ipcMain,
-  type IpcMainInvokeEvent,
 } from 'electron';
 import path from 'node:path';
 
-import { FinancialItemService } from './application/financial-item-service';
-import { CategoryService } from './application/category-service';
-import { FinancialItemCustomTypeService } from './application/financial-item-custom-type-service';
-import { TransactionService } from './application/transaction-service';
-import { openBootstrapDatabase } from './infrastructure/database/bootstrap-database';
-import { SqliteFinancialItemRepository } from './infrastructure/database/sqlite-financial-item-repository';
-import { SqliteCategoryRepository } from './infrastructure/database/sqlite-category-repository';
-import { SqliteFinancialItemCustomTypeRepository } from './infrastructure/database/sqlite-financial-item-custom-type-repository';
-import { SqliteTransactionRepository } from './infrastructure/database/sqlite-transaction-repository';
 import {
-  BootstrapStatus,
-  IPC_CHANNELS,
-} from './shared/bootstrap';
+  ApplicationController,
+  type IpcHandlerRegistry,
+} from './infrastructure/main/application-controller';
 import { toIpcResult } from './shared/ipc-result';
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 
 let mainWindow: BrowserWindow | null = null;
-let closeDatabase: (() => void) | null = null;
+let controller: ApplicationController | null = null;
 
-function registerApplicationHandlers(
-  financialItemService: FinancialItemService,
-  categoryService: CategoryService,
-  customTypeService: FinancialItemCustomTypeService,
-  transactionService: TransactionService,
-): void {
-  type IpcOperation = (
-    event: IpcMainInvokeEvent,
-    ...args: unknown[]
-  ) => unknown;
-  const handle = (channel: string, operation: IpcOperation): void => {
-    ipcMain.handle(channel, (event, ...args: unknown[]) =>
-      toIpcResult(() => operation(event, ...args)),
+const ipcRegistry: IpcHandlerRegistry = {
+  handle: (channel, operation) => {
+    ipcMain.handle(channel, (_event, ...args: unknown[]) =>
+      toIpcResult(() => operation(...args)),
     );
-  };
-
-  handle(
-    IPC_CHANNELS.getBootstrapStatus,
-    (): BootstrapStatus => ({
-      appName: 'FinanceHub',
-      databaseReady: true,
-      storagePolicy: 'sample-data-only',
-    }),
-  );
-  handle(IPC_CHANNELS.listFinancialItems, () =>
-    financialItemService.list(),
-  );
-  handle(
-    IPC_CHANNELS.createFinancialItem,
-    (_event, draft: unknown) => financialItemService.create(draft),
-  );
-  handle(
-    IPC_CHANNELS.updateFinancialItem,
-    (_event, id: unknown, draft: unknown) =>
-      financialItemService.update(id, draft),
-  );
-  handle(
-    IPC_CHANNELS.deleteFinancialItem,
-    (_event, id: unknown) => financialItemService.delete(id),
-  );
-  handle(IPC_CHANNELS.listCategories, () =>
-    categoryService.list(),
-  );
-  handle(
-    IPC_CHANNELS.createCategory,
-    (_event, draft: unknown) => categoryService.create(draft),
-  );
-  handle(
-    IPC_CHANNELS.updateCategory,
-    (_event, id: unknown, draft: unknown) =>
-      categoryService.update(id, draft),
-  );
-  handle(
-    IPC_CHANNELS.deleteCategory,
-    (_event, id: unknown) => categoryService.delete(id),
-  );
-  handle(
-    IPC_CHANNELS.reassignAndDeleteCategory,
-    (_event, id: unknown, replacementId: unknown) =>
-      categoryService.reassignAndDelete(id, replacementId),
-  );
-  handle(IPC_CHANNELS.listFinancialItemCustomTypes, () =>
-    customTypeService.list(),
-  );
-  handle(
-    IPC_CHANNELS.createFinancialItemCustomType,
-    (_event, draft: unknown) => customTypeService.create(draft),
-  );
-  handle(
-    IPC_CHANNELS.updateFinancialItemCustomType,
-    (_event, id: unknown, draft: unknown) =>
-      customTypeService.update(id, draft),
-  );
-  handle(
-    IPC_CHANNELS.deleteFinancialItemCustomType,
-    (_event, id: unknown) => customTypeService.delete(id),
-  );
-  handle(
-    IPC_CHANNELS.listTransactionsByMonth,
-    (_event, year: unknown, month: unknown, offset: unknown) =>
-      transactionService.listMonth(year, month, offset),
-  );
-  handle(
-    IPC_CHANNELS.createTransaction,
-    (_event, draft: unknown, year: unknown, month: unknown) =>
-      transactionService.create(draft, year, month),
-  );
-  handle(
-    IPC_CHANNELS.updateTransaction,
-    (
-      _event,
-      id: unknown,
-      draft: unknown,
-      year: unknown,
-      month: unknown,
-    ) => transactionService.update(id, draft, year, month),
-  );
-  handle(
-    IPC_CHANNELS.deleteTransaction,
-    (_event, id: unknown, year: unknown, month: unknown) =>
-      transactionService.delete(id, year, month),
-  );
-}
+  },
+  removeHandler: (channel) => ipcMain.removeHandler(channel),
+};
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -156,49 +51,15 @@ function createWindow(): void {
 }
 
 void app.whenReady().then(() => {
-  const databasePath = path.join(app.getPath('userData'), 'financehub.dev.db');
-  const bootstrapDatabase = openBootstrapDatabase(databasePath);
-  closeDatabase = bootstrapDatabase.close;
-  const repository = new SqliteFinancialItemRepository(
-    bootstrapDatabase.database,
+  const databasePath = path.join(
+    app.getPath('userData'),
+    'financehub.db',
   );
-  const categoryRepository = new SqliteCategoryRepository(
-    bootstrapDatabase.database,
+  controller = new ApplicationController(
+    databasePath,
+    ipcRegistry,
   );
-  const customTypeRepository =
-    new SqliteFinancialItemCustomTypeRepository(
-      bootstrapDatabase.database,
-    );
-  const transactionRepository = new SqliteTransactionRepository(
-    bootstrapDatabase.database,
-  );
-  const financialItemService = new FinancialItemService(
-    repository,
-    undefined,
-    undefined,
-    customTypeRepository,
-    transactionRepository,
-  );
-  const categoryService = new CategoryService(
-    categoryRepository,
-    transactionRepository,
-  );
-  const customTypeService = new FinancialItemCustomTypeService(
-    customTypeRepository,
-    repository,
-  );
-  const transactionService = new TransactionService(
-    transactionRepository,
-    categoryRepository,
-    repository,
-  );
-
-  registerApplicationHandlers(
-    financialItemService,
-    categoryService,
-    customTypeService,
-    transactionService,
-  );
+  controller.registerLockedHandlers();
   createWindow();
 
   app.on('activate', () => {
@@ -209,8 +70,8 @@ void app.whenReady().then(() => {
 });
 
 app.on('before-quit', () => {
-  closeDatabase?.();
-  closeDatabase = null;
+  controller?.close();
+  controller = null;
 });
 
 app.on('window-all-closed', () => {

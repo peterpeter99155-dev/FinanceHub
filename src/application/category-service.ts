@@ -8,6 +8,7 @@ import {
   CATEGORY_KINDS,
   CategoryKind,
   FinancialCategory,
+  assertUniqueActiveCategoryName,
   getCategoryRemovalPolicy,
 } from '../domain/category';
 import type { CategoryRepository } from './ports/category-repository';
@@ -26,12 +27,14 @@ export class CategoryService {
 
   create(input: unknown): readonly FinancialCategory[] {
     const draft = parseDraft(input);
-    this.repository.create({
+    const category = {
       id: this.createId(),
       ...draft,
       isBuiltIn: false,
       isActive: true,
-    });
+    };
+    assertUniqueActiveCategoryName(this.repository.list(), category);
+    this.repository.create(category);
     return this.list();
   }
 
@@ -58,10 +61,12 @@ export class CategoryService {
         'A used financial category cannot change between income and expense.',
       );
     }
-    this.repository.update({
+    const category = {
       ...existing,
       ...draft,
-    });
+    };
+    assertUniqueActiveCategoryName(this.repository.list(), category);
+    this.repository.update(category);
     return this.list();
   }
 

@@ -2,8 +2,8 @@
 
 ## 文件資訊
 
-- 版本：1.3
-- 日期：2026-07-28
+- 版本：1.4
+- 日期：2026-07-29
 - 狀態：**正式生效**
 - 適用範圍：所有 Sprint，不隨 Sprint 變動
 - 維護方式：每次新增例外或決策，同步記入 `04_Decision_Log.md`
@@ -19,6 +19,10 @@
 - 只寫在 Sprint Review 裡的教訓**不會改變未來行為** —— Review 是歷史記錄，不在必讀清單內。
 
 ### 修訂紀錄
+
+**1.4（2026-07-29）** Sprint 03 階段 0 期間補入一條：
+
+- 第 9.2.1 節：驗收前必須先確認環境能力。來源：本專案三次因沙箱環境限制產生假紅燈，其中一次差點導致放棄一條可行的技術路線。
 
 **1.3（2026-07-28）** Sprint 2.5 結束後補入四條，全部來自本次的真實事故：
 
@@ -341,6 +345,32 @@ await expect(
 
 同時應驗證造成該 bug 的中間狀態，例如上例額外驗證了「輸入金額後焦點仍留在金額欄位」。
 
+### 9.2.1 驗收前必須先確認環境能力
+
+紅燈只有在「環境本來就有能力執行這項測試」的前提下才可解讀。
+
+執行下列測試前，必須先確認對應的環境能力，並在回報中說明確認結果：
+
+| 測試類型 | 必須先確認 |
+|---|---|
+| Electron 啟動類測試 | 有 GUI 能力；`node_modules/electron/dist/electron.exe` 與 `path.txt` 確實存在 |
+| 需下載資源的打包與安裝 | 網路可連線至所需來源 |
+| 原生模組相關測試 | `.node` binary 確實存在且架構正確 |
+
+**若環境能力不足，回報「無法執行」而不是「測試失敗」。** 兩者的處理方式完全不同：前者要修環境，後者要修程式。
+
+#### 為什麼需要這一條
+
+本專案曾三次因環境限制產生假紅燈，每次都花掉一輪來分辨是產品問題還是環境問題：
+
+1. 沙箱沒有 GUI，Electron 測試無法啟動。
+2. 沙箱阻擋網路，打包資源下載失敗。
+3. 沙箱阻擋網路導致 `electron` 套件的 postinstall 未下載執行檔，測試回報「找不到路徑」，看起來像 Electron 版本不相容。
+
+第 3 次尤其危險：它差點導致放棄一條可行的技術路線，理由卻只是安裝沒完成。
+
+**假紅燈與假綠燈同樣有害。** 假綠燈讓你誤以為驗過了，假紅燈讓你誤判產品有問題並做出錯誤的技術決策。
+
 ### 9.3 不得用延長等待或 sleep 掩蓋競速
 
 當測試間歇性失敗時，**禁止**用下列方式處理：
@@ -417,11 +447,16 @@ await expect(
 | 已套用的 migration 不得修改 | migration 區塊 SHA-256 雜湊固定 | `tests/infrastructure/bootstrap-database.test.ts` |
 | renderer 不得比對錯誤訊息內容、不得出現資料庫字眼 | 掃描 `App.tsx`、`TransactionsView.tsx` 原始碼 | `tests/shared/errors.test.ts` |
 | 每個錯誤代碼都必須有中文文案 | 代碼與文案一一對應檢查 | `tests/shared/errors.test.ts` |
+| renderer `.tsx` 單檔不得超過 300 行 | 掃描所有 renderer TSX 並計算實際行數 | `scripts/verify-architecture.cjs` |
+| 單一元件不得超過 8 個 `useState` | 以 TypeScript AST 計算頂層元件內的呼叫，import 不計 | `scripts/verify-architecture.cjs` |
+| 不得用 `setTimeout` 協調焦點 | 以 TypeScript AST 檢查 `setTimeout` callback 內的 focus 呼叫；通知與防抖等不含 focus 的刻意延遲不受影響 | `scripts/verify-architecture.cjs` |
+| infrastructure 不得 import domain 驗證與計算函式 | 以 TypeScript AST 檢查 domain named import 的 `assert`、`calculate`、`compute`、`validate`、`apply`、`reverse`、`sum` 等函式 | `scripts/verify-architecture.cjs` |
+| diff 不得被純換行或空白假差異掩蓋 | 比對 `git diff`、`git diff -w` 與 `--ignore-space-at-eol` 的檔案與行數 | `scripts/verify-architecture.cjs` |
+| 變更規模異常時必須警告 | 相對 `main` merge-base 超過 25 檔或 1,500 行時輸出警告但不誤判為規則失敗 | `scripts/verify-architecture.cjs` |
 
 ### 尚未機械化、值得未來補上的
 
-- 單檔 300 行、單元件 8 個 `useState` 的上限（可用 lint 規則或測試掃描）
-- 第 6.1 節禁止 `setTimeout` 協調焦點（可用 lint 規則限制特定檔案）
-- infrastructure 不得呼叫 domain 的驗證與計算函式（可用 import 邊界檢查）
+- application service 不得直接依賴具體 repository 實作（目前由 code review 檢查）。
+- renderer 不得實作財務運算（目前只有部分規則由既有測試覆蓋）。
 
 補上任何一項時，請同步更新上方表格。

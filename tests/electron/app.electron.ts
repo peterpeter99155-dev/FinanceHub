@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
@@ -16,6 +16,7 @@ const executablePath = path.resolve(
   'electron.exe',
 );
 const applicationEntry = path.resolve('.webpack', 'x64', 'main');
+const TEST_PASSWORD = 'S3-Electron-Password!';
 
 test('completes the Sprint 01 net-worth flow and persists data', async () => {
   const userDataDirectory = mkdtempSync(
@@ -26,6 +27,8 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
   try {
     application = await launchApplication(userDataDirectory);
     let page = await application.firstWindow();
+    await expectLockedFinancialDataHidden(page);
+    await setupDatabase(page, userDataDirectory);
 
     const ipcError = await page.evaluate(async () => {
       try {
@@ -156,6 +159,12 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     await application.close();
     application = await launchApplication(userDataDirectory);
     page = await application.firstWindow();
+    await expectLockedFinancialDataHidden(page, [
+      '示範銀行存款',
+      '示範房產',
+      '示範房貸',
+    ]);
+    await unlockDatabase(page);
 
     await expect(page.getByTestId('net-worth')).toContainText(
       'TWD 4,100,000',
@@ -236,6 +245,110 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     rmSync(userDataDirectory, { recursive: true, force: true });
   }
 });
+
+async function setupDatabase(
+  page: Page,
+  userDataDirectory: string,
+): Promise<void> {
+  const password = page.getByTestId('security-password');
+  const confirmation = page.getByTestId(
+    'security-password-confirmation',
+  );
+  await expect(
+    page.getByRole('heading', { name: '設定主密碼' }),
+  ).toBeVisible();
+  await expect(password).toBeFocused();
+  await expect(
+    page.getByText(userDataDirectory, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('financehub.db', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('financehub.db.metadata.json', { exact: true }),
+  ).toBeVisible();
+
+  await password.fill(TEST_PASSWORD);
+  await confirmation.fill(`${TEST_PASSWORD}-Mismatch`);
+  await page
+    .getByRole('button', { name: '建立加密資料庫' })
+    .click();
+  await expect(page.getByRole('alert')).toContainText(
+    '兩次輸入的主密碼不一致',
+  );
+  expectFinancialFilesNotToExist(userDataDirectory);
+
+  await confirmation.fill(TEST_PASSWORD);
+  await page
+    .getByRole('button', { name: '建立加密資料庫' })
+    .click();
+  await expect(page.getByRole('alert')).toContainText(
+    '請先確認你了解資料無法復原',
+  );
+  expectFinancialFilesNotToExist(userDataDirectory);
+
+  await page
+    .getByLabel('我了解必須記住密碼，並一起備份兩個資料檔案')
+    .check();
+  await page
+    .getByRole('button', { name: '建立加密資料庫' })
+    .click();
+  await expect(page.getByTestId('net-worth')).toBeVisible();
+}
+
+async function unlockDatabase(page: Page): Promise<void> {
+  const password = page.getByTestId('security-password');
+  await expect(
+    page.getByRole('heading', { name: '解鎖 FinanceHub' }),
+  ).toBeVisible();
+  await expect(password).toBeFocused();
+
+  await password.fill('S3 wrong UI password');
+  await password.press('Enter');
+  await expect(page.getByRole('alert')).toContainText(
+    '主密碼不正確',
+  );
+  await expect(password).toBeFocused();
+
+  await password.fill(TEST_PASSWORD);
+  await password.press('Enter');
+  await expect(page.getByTestId('net-worth')).toBeVisible();
+}
+
+async function expectLockedFinancialDataHidden(
+  page: Page,
+  names: readonly string[] = [],
+): Promise<void> {
+  await expect(
+    page.getByRole('heading', {
+      name: /設定主密碼|解鎖 FinanceHub/,
+    }),
+  ).toBeVisible();
+  await expect(page.getByTestId('net-worth')).toHaveCount(0);
+  await expect(page.getByTestId('total-assets')).toHaveCount(0);
+  await expect(page.getByTestId('total-liabilities')).toHaveCount(0);
+  await expect(page.getByText(/TWD/)).toHaveCount(0);
+  await expect(page.getByText('資產與負債', { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(page.getByText('收支紀錄', { exact: true })).toHaveCount(0);
+  for (const name of names) {
+    await expect(page.getByText(name, { exact: true })).toHaveCount(0);
+  }
+}
+
+function expectFinancialFilesNotToExist(
+  userDataDirectory: string,
+): void {
+  expect(
+    existsSync(path.join(userDataDirectory, 'financehub.db')),
+  ).toBe(false);
+  expect(
+    existsSync(
+      path.join(userDataDirectory, 'financehub.db.metadata.json'),
+    ),
+  ).toBe(false);
+}
 
 async function launchApplication(
   userDataDirectory: string,

@@ -174,4 +174,78 @@ describe('openBootstrapDatabase', () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+
+  it('preserves supported monetary integers through a database round trip', () => {
+    connection = openBootstrapDatabase(':memory:');
+
+    const financialItemAmounts = [
+      999_999_999_999,
+      999_999_999_998,
+      1,
+      0,
+    ] as const;
+    const insertFinancialItem = connection.database.prepare(`
+      INSERT INTO financial_items (
+        id, name, direction, type, amount, status, updated_at,
+        is_active, include_in_net_worth
+      ) VALUES (?, ?, 'asset', 'cash', ?, 'confirmed', ?, 1, 1)
+    `);
+
+    financialItemAmounts.forEach((amount, index) => {
+      insertFinancialItem.run(
+        `precision-item-${index}`,
+        `Precision item ${index}`,
+        amount,
+        '2026-07-29T00:00:00.000Z',
+      );
+    });
+
+    connection.database
+      .prepare(`
+        INSERT INTO financial_transactions (
+          id, kind, amount, occurred_at, financial_month,
+          source_account_id, destination_account_id, category_id,
+          name, note, created_at, updated_at
+        ) VALUES (
+          ?, 'expense', ?, ?, ?, NULL, NULL, NULL, ?, '', ?, ?
+        )
+      `)
+      .run(
+        'precision-transaction',
+        999_999_999_999,
+        '2026-07-29T00:00:00.000Z',
+        '2026-07',
+        'Precision transaction',
+        '2026-07-29T00:00:00.000Z',
+        '2026-07-29T00:00:00.000Z',
+      );
+
+    const storedFinancialItemAmounts = connection.database
+      .prepare(`
+        SELECT amount
+        FROM financial_items
+        WHERE id LIKE 'precision-item-%'
+        ORDER BY id
+      `)
+      .all() as { amount: number }[];
+    const storedTransaction = connection.database
+      .prepare(`
+        SELECT amount
+        FROM financial_transactions
+        WHERE id = ?
+      `)
+      .get('precision-transaction') as { amount: number };
+
+    expect(storedFinancialItemAmounts.map(({ amount }) => amount)).toEqual(
+      financialItemAmounts,
+    );
+    expect(storedTransaction.amount).toBe(999_999_999_999);
+
+    for (const { amount } of storedFinancialItemAmounts) {
+      expect(typeof amount).toBe('number');
+      expect(Number.isSafeInteger(amount)).toBe(true);
+    }
+    expect(typeof storedTransaction.amount).toBe('number');
+    expect(Number.isSafeInteger(storedTransaction.amount)).toBe(true);
+  });
 });

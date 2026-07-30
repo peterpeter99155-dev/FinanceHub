@@ -1,7 +1,4 @@
-import type {
-  FinancialTransaction,
-  MonthlyTransactionSummary,
-} from '../../domain/transaction';
+import type { FinancialTransaction } from '../../domain/transaction';
 
 export interface TransactionPage {
   readonly items: readonly FinancialTransaction[];
@@ -17,14 +14,20 @@ export interface TransactionRepository {
     offset?: number,
     limit?: number,
   ): TransactionPage;
-  summarizeMonth(
+  listAllByMonth(
     year: number,
     month: number,
-  ): MonthlyTransactionSummary;
+  ): readonly FinancialTransaction[];
   countByCategoryId(id: string): number;
   countByAccountId(id: string): number;
   reassignCategory(id: string, replacementId: string): void;
-  create(transaction: FinancialTransaction): void;
-  update(transaction: FinancialTransaction): void;
+  create(
+    transaction: FinancialTransaction,
+    financialMonth: string,
+  ): void;
+  update(
+    transaction: FinancialTransaction,
+    financialMonth: string,
+  ): void;
   delete(id: string): void;
 }

@@ -1,12 +1,10 @@
-import type { DatabaseSync } from 'node:sqlite';
+import type { SqliteDatabase } from './sqlite-database';
 
 import type { CategoryRepository } from '../../application/ports/category-repository';
 import {
   CATEGORY_KINDS,
   CategoryKind,
   FinancialCategory,
-  assertUniqueActiveCategoryName,
-  validateFinancialCategory,
 } from '../../domain/category';
 
 interface CategoryRow {
@@ -18,7 +16,7 @@ interface CategoryRow {
 }
 
 export class SqliteCategoryRepository implements CategoryRepository {
-  constructor(private readonly database: DatabaseSync) {}
+  constructor(private readonly database: SqliteDatabase) {}
 
   list(): readonly FinancialCategory[] {
     const rows = this.database
@@ -45,9 +43,6 @@ export class SqliteCategoryRepository implements CategoryRepository {
   }
 
   create(category: FinancialCategory): void {
-    validateFinancialCategory(category);
-    assertUniqueActiveCategoryName(this.list(), category);
-
     this.database
       .prepare(
         `INSERT INTO financial_categories (
@@ -64,8 +59,6 @@ export class SqliteCategoryRepository implements CategoryRepository {
   }
 
   update(category: FinancialCategory): void {
-    validateFinancialCategory(category);
-    assertUniqueActiveCategoryName(this.list(), category);
     const existing = this.findById(category.id);
 
     if (!existing) {
@@ -126,7 +119,6 @@ function mapRow(row: CategoryRow): FinancialCategory {
     isActive: row.is_active === 1,
   };
 
-  validateFinancialCategory(category);
   return category;
 }
 

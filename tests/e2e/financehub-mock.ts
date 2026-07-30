@@ -25,6 +25,7 @@ import type {
 } from '../../src/shared/transactions';
 
 const NOW = '2026-07-28T09:00:00.000Z';
+const BROWSER_TEST_PASSWORD = 'S3-Browser-Password!';
 
 const BUILT_IN_CATEGORIES: readonly FinancialCategory[] = [
   category('income-salary', 'income', '薪資'),
@@ -43,6 +44,18 @@ interface MutableState {
 }
 
 export function installFinanceHubMock(): void {
+  const requestedSecurityState = new URLSearchParams(
+    window.location.search,
+  ).get('security');
+  let databaseState:
+    | 'setup_required'
+    | 'locked'
+    | 'unlocked' =
+    requestedSecurityState === 'setup'
+      ? 'setup_required'
+      : requestedSecurityState === 'locked'
+        ? 'locked'
+        : 'unlocked';
   const state: MutableState = {
     items: [
       financialItem('bank-1', '示範銀行', 'bank_deposit', 100_000),
@@ -54,16 +67,38 @@ export function installFinanceHubMock(): void {
     nextId: 1,
   };
 
-  window.financeHub = createApi(state);
+  window.financeHub = createApi(state, {
+    get: () => databaseState,
+    unlock: (password) => {
+      if (
+        databaseState === 'locked' &&
+        password !== BROWSER_TEST_PASSWORD
+      ) {
+        throw { code: 'WRONG_PASSWORD' };
+      }
+      databaseState = 'unlocked';
+    },
+  });
 }
 
-function createApi(state: MutableState): FinanceHubApi {
+function createApi(
+  state: MutableState,
+  security: {
+    get(): 'setup_required' | 'locked' | 'unlocked';
+    unlock(password: string): void;
+  },
+): FinanceHubApi {
   return {
     getBootstrapStatus: async () => ({
       appName: 'FinanceHub',
-      databaseReady: true,
+      databaseReady: security.get() === 'unlocked',
+      databaseState: security.get(),
+      databaseDirectory: 'C:\\FinanceHub-Test-Data',
+      databaseFileName: 'financehub.db',
+      metadataFileName: 'financehub.db.metadata.json',
       storagePolicy: 'sample-data-only',
     }),
+    unlockDatabase: async (password) => security.unlock(password),
     financialItems: {
       list: async () => financialItemSnapshot(state),
       create: async (draft) => {

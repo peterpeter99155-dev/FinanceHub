@@ -1,14 +1,11 @@
-import type { DatabaseSync } from 'node:sqlite';
+import type { SqliteDatabase } from './sqlite-database';
 import {
   ERROR_CODES,
   FinanceHubError,
 } from '../../shared/errors';
 
 import type { FinancialItemCustomTypeRepository } from '../../application/ports/financial-item-custom-type-repository';
-import {
-  FinancialItemCustomType,
-  validateFinancialItemCustomType,
-} from '../../domain/financial-item-custom-type';
+import type { FinancialItemCustomType } from '../../domain/financial-item-custom-type';
 import {
   FINANCIAL_ITEM_DIRECTIONS,
   FinancialItemDirection,
@@ -24,7 +21,7 @@ interface CustomTypeRow {
 export class SqliteFinancialItemCustomTypeRepository
   implements FinancialItemCustomTypeRepository
 {
-  constructor(private readonly database: DatabaseSync) {}
+  constructor(private readonly database: SqliteDatabase) {}
 
   list(): readonly FinancialItemCustomType[] {
     const rows = this.database
@@ -51,7 +48,6 @@ export class SqliteFinancialItemCustomTypeRepository
   }
 
   create(type: FinancialItemCustomType): void {
-    validateFinancialItemCustomType(type);
     this.assertUniqueActiveName(type);
 
     this.database
@@ -69,7 +65,6 @@ export class SqliteFinancialItemCustomTypeRepository
   }
 
   update(type: FinancialItemCustomType): void {
-    validateFinancialItemCustomType(type);
     const existing = this.findById(type.id);
 
     if (!existing) {
@@ -145,7 +140,6 @@ function mapRow(row: CustomTypeRow): FinancialItemCustomType {
     isActive: row.is_active === 1,
   };
 
-  validateFinancialItemCustomType(type);
   return type;
 }
 

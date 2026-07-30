@@ -5,6 +5,19 @@ import type {
 } from '../domain/financial-item';
 import type { TransactionKind } from '../domain/transaction';
 
+export const SECURITY_LABELS = {
+  setupEyebrow: '保護你的財務資料',
+  setupTitle: '設定主密碼',
+  unlockEyebrow: '本機資料已加密',
+  unlockTitle: '解鎖 FinanceHub',
+  password: '主密碼',
+  confirmPassword: '再次輸入主密碼',
+  acknowledgeRecoveryRisk:
+    '我了解必須記住密碼，並一起備份兩個資料檔案',
+  createAndContinue: '建立加密資料庫',
+  unlockAndContinue: '解鎖',
+} as const;
+
 export const FINANCIAL_ITEM_TYPE_OPTIONS: Readonly<
   Record<
     FinancialItemDirection,

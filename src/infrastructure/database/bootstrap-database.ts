@@ -1,4 +1,7 @@
-import { DatabaseSync } from 'node:sqlite';
+import {
+  openSqliteDatabase,
+  SqliteDatabase,
+} from './sqlite-database';
 
 interface Migration {
   readonly version: number;
@@ -166,33 +169,15 @@ const MIGRATIONS: readonly Migration[] = [
 ] as const;
 
 export interface BootstrapDatabase {
-  readonly database: DatabaseSync;
+  readonly database: SqliteDatabase;
   close(): void;
 }
 
 export function openBootstrapDatabase(databasePath: string): BootstrapDatabase {
-  const database = new DatabaseSync(databasePath);
+  const database = openSqliteDatabase(databasePath);
 
   try {
-    database.exec('PRAGMA journal_mode = WAL;');
-    database.exec('PRAGMA foreign_keys = ON;');
-    database.exec(`
-      CREATE TABLE IF NOT EXISTS schema_migrations (
-        version INTEGER PRIMARY KEY,
-        applied_at TEXT NOT NULL
-      );
-    `);
-
-    database
-      .prepare(
-        `INSERT OR IGNORE INTO schema_migrations (version, applied_at)
-         VALUES (?, ?)`,
-      )
-      .run(1, new Date().toISOString());
-
-    for (const migration of MIGRATIONS) {
-      applyMigration(database, migration);
-    }
+    bootstrapDatabaseConnection(database);
   } catch (error) {
     database.close();
     throw error;
@@ -204,8 +189,32 @@ export function openBootstrapDatabase(databasePath: string): BootstrapDatabase {
   };
 }
 
+export function bootstrapDatabaseConnection(
+  database: SqliteDatabase,
+): void {
+  database.exec('PRAGMA journal_mode = WAL;');
+  database.exec('PRAGMA foreign_keys = ON;');
+  database.exec(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        version INTEGER PRIMARY KEY,
+        applied_at TEXT NOT NULL
+      );
+    `);
+
+  database
+    .prepare(
+      `INSERT OR IGNORE INTO schema_migrations (version, applied_at)
+         VALUES (?, ?)`,
+    )
+    .run(1, new Date().toISOString());
+
+  for (const migration of MIGRATIONS) {
+    applyMigration(database, migration);
+  }
+}
+
 function applyMigration(
-  database: DatabaseSync,
+  database: SqliteDatabase,
   migration: Migration,
 ): void {
   const existing = database

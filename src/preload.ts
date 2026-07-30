@@ -45,6 +45,8 @@ async function invoke<T>(
 const financeHubApi: FinanceHubApi = Object.freeze({
   getBootstrapStatus: () =>
     invoke<BootstrapStatus>(IPC_CHANNELS.getBootstrapStatus),
+  unlockDatabase: (password: string) =>
+    invoke<void>(IPC_CHANNELS.unlockDatabase, password),
   financialItems: Object.freeze({
     list: () =>
       invoke<FinancialItemSnapshot>(IPC_CHANNELS.listFinancialItems),

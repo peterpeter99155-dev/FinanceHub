@@ -1,4 +1,4 @@
-import type { DatabaseSync } from 'node:sqlite';
+import type { SqliteDatabase } from './sqlite-database';
 
 import type { FinancialItemRepository } from '../../application/ports/financial-item-repository';
 import {
@@ -9,7 +9,6 @@ import {
   FinancialItem,
   FinancialItemDirection,
   FinancialItemType,
-  validateFinancialItem,
 } from '../../domain/financial-item';
 import { createTwdAmount } from '../../domain/money';
 
@@ -29,7 +28,7 @@ interface FinancialItemRow {
 export class SqliteFinancialItemRepository
   implements FinancialItemRepository
 {
-  constructor(private readonly database: DatabaseSync) {}
+  constructor(private readonly database: SqliteDatabase) {}
 
   list(): readonly FinancialItem[] {
     const rows = this.database
@@ -70,8 +69,6 @@ export class SqliteFinancialItemRepository
   }
 
   create(item: FinancialItem): void {
-    validateFinancialItem(item);
-
     this.database
       .prepare(
         `INSERT INTO financial_items (
@@ -94,8 +91,6 @@ export class SqliteFinancialItemRepository
   }
 
   update(item: FinancialItem): void {
-    validateFinancialItem(item);
-
     const result = this.database
       .prepare(
         `UPDATE financial_items
@@ -157,7 +152,6 @@ function mapRow(row: FinancialItemRow): FinancialItem {
     includeInNetWorth: row.include_in_net_worth === 1,
   };
 
-  validateFinancialItem(item);
   return item;
 }
 
