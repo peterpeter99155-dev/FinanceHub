@@ -25,7 +25,7 @@ import type {
 } from '../../src/shared/transactions';
 
 const NOW = '2026-07-28T09:00:00.000Z';
-const BROWSER_TEST_PASSWORD = 'S3 browser password only';
+const BROWSER_TEST_PASSWORD = 'S3-Browser-Password!';
 
 const BUILT_IN_CATEGORIES: readonly FinancialCategory[] = [
   category('income-salary', 'income', '薪資'),
@@ -93,6 +93,9 @@ function createApi(
       appName: 'FinanceHub',
       databaseReady: security.get() === 'unlocked',
       databaseState: security.get(),
+      databaseDirectory: 'C:\\FinanceHub-Test-Data',
+      databaseFileName: 'financehub.db',
+      metadataFileName: 'financehub.db.metadata.json',
       storagePolicy: 'sample-data-only',
     }),
     unlockDatabase: async (password) => security.unlock(password),

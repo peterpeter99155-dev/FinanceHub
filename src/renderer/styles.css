@@ -80,11 +80,44 @@ body {
   line-height: 1.7;
 }
 
-.security-guidance {
-  margin: -4px 0 0;
+.security-password-field {
+  position: relative;
+  display: block;
+}
+
+.security-password-field input {
+  width: 100%;
+  padding-right: 48px;
+}
+
+.security-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  padding: 7px;
+  border: 0;
+  border-radius: 8px;
   color: #52695c;
-  font-size: 0.875rem;
-  line-height: 1.65;
+  background: transparent;
+  transform: translateY(-50%);
+  place-items: center;
+}
+
+.security-password-toggle:hover {
+  background: #edf3ee;
+}
+
+.security-password-toggle svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .security-warning {
@@ -104,6 +137,20 @@ body {
   margin: 0;
   font-size: 0.875rem;
   line-height: 1.65;
+}
+
+.security-warning ul {
+  margin: 9px 0;
+  padding-left: 22px;
+}
+
+.security-warning code {
+  overflow-wrap: anywhere;
+  font-family: Consolas, monospace;
+}
+
+.security-warning .security-storage-path {
+  margin-bottom: 14px;
 }
 
 form .security-confirmation {

@@ -13,6 +13,8 @@ import {
   SECURITY_MESSAGES,
   securityErrorMessage,
 } from '../messages';
+import { isValidNewPassword } from '../../shared/security-password';
+import { PasswordInput } from './PasswordInput';
 
 type AccessMode = 'loading' | 'setup' | 'unlock' | 'unlocked' | 'error';
 
@@ -23,6 +25,8 @@ interface SecurityGateProps {
 export function SecurityGate({ children }: SecurityGateProps) {
   const [mode, setMode] = useState<AccessMode>('loading');
   const [fatalError, setFatalError] = useState<string | null>(null);
+  const [bootstrapStatus, setBootstrapStatus] =
+    useState<BootstrapStatus | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -30,6 +34,7 @@ export function SecurityGate({ children }: SecurityGateProps) {
       .getBootstrapStatus()
       .then((status) => {
         if (active) {
+          setBootstrapStatus(status);
           setMode(modeFor(status));
         }
       })
@@ -72,6 +77,7 @@ export function SecurityGate({ children }: SecurityGateProps) {
       {(mode === 'setup' || mode === 'unlock') && (
         <SecurityAccessForm
           mode={mode}
+          bootstrapStatus={bootstrapStatus}
           onUnlocked={() => setMode('unlocked')}
         />
       )}
@@ -80,11 +86,13 @@ export function SecurityGate({ children }: SecurityGateProps) {
 }
 
 interface SecurityAccessFormProps {
+  readonly bootstrapStatus: BootstrapStatus | null;
   readonly mode: 'setup' | 'unlock';
   readonly onUnlocked: () => void;
 }
 
 function SecurityAccessForm({
+  bootstrapStatus,
   mode,
   onUnlocked,
 }: SecurityAccessFormProps) {
@@ -106,8 +114,15 @@ function SecurityAccessForm({
     if (composingRef.current || submitting) {
       return;
     }
-    if (password.length < 8 || password.length > 1024) {
-      setError('主密碼須為 8 至 1024 個字元。');
+    if (
+      (isSetup && !isValidNewPassword(password)) ||
+      (!isSetup && (password.length < 8 || password.length > 1024))
+    ) {
+      setError(
+        isSetup
+          ? SECURITY_MESSAGES.newPasswordInvalid
+          : '主密碼須為 8 至 1024 個文字。',
+      );
       return;
     }
     if (isSetup && password !== confirmation) {
@@ -161,41 +176,54 @@ function SecurityAccessForm({
       </p>
 
       <form onSubmit={(event) => void submit(event)}>
-        <label>
-          {SECURITY_LABELS.password}
-          <input
-            ref={passwordRef}
-            autoComplete={isSetup ? 'new-password' : 'current-password'}
-            data-testid="security-password"
-            maxLength={1024}
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            onCompositionEnd={onCompositionEnd}
-            onCompositionStart={onCompositionStart}
-          />
-        </label>
+        <PasswordInput
+          ref={passwordRef}
+          autoComplete={isSetup ? 'new-password' : 'current-password'}
+          dataTestId="security-password"
+          label={SECURITY_LABELS.password}
+          maxLength={isSetup ? 64 : 1024}
+          placeholder={
+            isSetup
+              ? SECURITY_MESSAGES.newPasswordPlaceholder
+              : '請輸入主密碼'
+          }
+          restrictToNewPasswordCharacters={isSetup}
+          value={password}
+          onChange={setPassword}
+          onCompositionEnd={onCompositionEnd}
+          onCompositionStart={onCompositionStart}
+        />
 
         {isSetup && (
           <>
-            <label>
-              {SECURITY_LABELS.confirmPassword}
-              <input
-                autoComplete="new-password"
-                data-testid="security-password-confirmation"
-                maxLength={1024}
-                type="password"
-                value={confirmation}
-                onChange={(event) => setConfirmation(event.target.value)}
-                onCompositionEnd={onCompositionEnd}
-                onCompositionStart={onCompositionStart}
-              />
-            </label>
-            <p className="security-guidance">
-              {SECURITY_MESSAGES.passphraseGuidance}
-            </p>
+            <PasswordInput
+              autoComplete="new-password"
+              dataTestId="security-password-confirmation"
+              label={SECURITY_LABELS.confirmPassword}
+              maxLength={64}
+              placeholder="請再輸入一次相同密碼"
+              restrictToNewPasswordCharacters
+              value={confirmation}
+              onChange={setConfirmation}
+              onCompositionEnd={onCompositionEnd}
+              onCompositionStart={onCompositionStart}
+            />
             <div className="security-warning">
-              <strong>請先了解：兩種情況都無法復原</strong>
+              <strong>如何備份資料？</strong>
+              <p>{SECURITY_MESSAGES.backupInstructions}</p>
+              <ul>
+                <li>
+                  <code>{bootstrapStatus?.databaseFileName}</code>
+                </li>
+                <li>
+                  <code>{bootstrapStatus?.metadataFileName}</code>
+                </li>
+              </ul>
+              <p className="security-storage-path">
+                資料位置：
+                <code>{bootstrapStatus?.databaseDirectory}</code>
+              </p>
+              <strong>為什麼無法復原？</strong>
               <p>{SECURITY_MESSAGES.irreversibleWarning}</p>
             </div>
             <label className="checkbox-label security-confirmation">

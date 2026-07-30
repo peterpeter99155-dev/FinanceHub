@@ -1,4 +1,5 @@
 import { CategoryService } from '../../application/category-service';
+import path from 'node:path';
 import { FinancialItemCustomTypeService } from '../../application/financial-item-custom-type-service';
 import { FinancialItemService } from '../../application/financial-item-service';
 import { TransactionService } from '../../application/transaction-service';
@@ -73,7 +74,7 @@ export class ApplicationController {
 
   private async getBootstrapStatus(): Promise<BootstrapStatus> {
     if (this.state === 'unlocked') {
-      return bootstrapStatus('unlocked');
+      return bootstrapStatus('unlocked', this.databasePath);
     }
 
     const fileState = await inspectDatabaseFiles(
@@ -81,6 +82,7 @@ export class ApplicationController {
     );
     return bootstrapStatus(
       fileState === 'new' ? 'setup_required' : 'locked',
+      this.databasePath,
     );
   }
 
@@ -120,11 +122,15 @@ export class ApplicationController {
 
 function bootstrapStatus(
   databaseState: BootstrapStatus['databaseState'],
+  databasePath: string,
 ): BootstrapStatus {
   return {
     appName: 'FinanceHub',
     databaseReady: databaseState === 'unlocked',
     databaseState,
+    databaseDirectory: path.dirname(databasePath),
+    databaseFileName: path.basename(databasePath),
+    metadataFileName: `${path.basename(databasePath)}.metadata.json`,
     storagePolicy: 'sample-data-only',
   };
 }

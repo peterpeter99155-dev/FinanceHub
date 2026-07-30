@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   existsSync,
   mkdtempSync,
@@ -16,9 +16,10 @@ import {
   openOrCreateEncryptedDatabase,
 } from '../../src/infrastructure/database/encrypted-database';
 import { ERROR_CODES } from '../../src/shared/errors';
+import * as newPasswordPolicy from '../../src/shared/security-password';
 
-const TEST_PASSWORD = 'S3 core fixed password only';
-const WRONG_TEST_PASSWORD = 'S3 core wrong password only';
+const TEST_PASSWORD = 'S3-Core-Fixed-Password!';
+const WRONG_TEST_PASSWORD = 'S3-Core-Wrong-Password!';
 
 describe('encrypted database core', () => {
   let directory: string | undefined;
@@ -27,6 +28,58 @@ describe('encrypted database core', () => {
     if (directory) {
       rmSync(directory, { recursive: true, force: true });
       directory = undefined;
+    }
+  });
+
+  it('rejects non-ASCII characters when creating a new database', async () => {
+    const databasePath = createDatabasePath();
+
+    await expect(
+      openOrCreateEncryptedDatabase(databasePath, '中文Password123!'),
+    ).rejects.toMatchObject({
+      code: ERROR_CODES.invalidPassword,
+    });
+
+    expect(existsSync(databasePath)).toBe(false);
+    expect(existsSync(`${databasePath}.metadata.json`)).toBe(false);
+  });
+
+  it('unlocks an existing database created with a Chinese password', async () => {
+    const databasePath = createDatabasePath();
+    const legacyPassword = `舊版中文密碼${'A'.repeat(65)}`;
+    expect(
+      newPasswordPolicy.isValidNewPassword(legacyPassword),
+    ).toBe(false);
+
+    const legacySetup = vi
+      .spyOn(newPasswordPolicy, 'isValidNewPassword')
+      .mockReturnValue(true);
+    try {
+      const legacyConnection =
+        await openOrCreateEncryptedDatabase(
+          databasePath,
+          legacyPassword,
+        );
+      legacyConnection.close();
+    } finally {
+      legacySetup.mockRestore();
+    }
+
+    const reopened = await openExistingEncryptedDatabase(
+      databasePath,
+      legacyPassword,
+    );
+    try {
+      expect(
+        reopened.database
+          .prepare(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'financial_items'",
+          )
+          .pluck()
+          .get(),
+      ).toBe('financial_items');
+    } finally {
+      reopened.close();
     }
   });
 

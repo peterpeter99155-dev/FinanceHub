@@ -5,10 +5,14 @@ import {
 } from '../shared/errors';
 
 export const SECURITY_MESSAGES = {
-  passphraseGuidance:
-    '建議使用多個不相關詞組成、容易記住但夠長的密語；不強制大小寫、數字或符號。',
+  newPasswordPlaceholder:
+    '8 至 64 個半形英文、數字或特殊符號',
+  newPasswordInvalid:
+    '密碼需要 8 至 64 個半形英文、數字或特殊符號。',
+  backupInstructions:
+    '關閉 FinanceHub 後，將下列兩個檔案一起複製到安全的位置。缺少任何一個都無法還原。',
   irreversibleWarning:
-    '忘記主密碼，或遺失與資料庫放在一起的 metadata 檔案，都會使全部資料永久無法復原。FinanceHub 沒有重設信件，客服也無法代為解鎖。請記住密碼，並依 README 定期一起備份資料庫與 metadata 檔案。',
+    'FinanceHub 不會保存你的密碼，也沒有重設密碼或繞過密碼的功能。忘記密碼，或遺失上述任一檔案，資料都無法取回。',
 } as const;
 
 export function securityErrorMessage(error: unknown): string {

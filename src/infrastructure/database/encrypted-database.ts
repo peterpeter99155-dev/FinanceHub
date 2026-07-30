@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { rename, rm } from 'node:fs/promises';
 
 import { FinanceHubError, ERROR_CODES } from '../../shared/errors';
+import { isValidNewPassword } from '../../shared/security-password';
 import {
   bootstrapDatabaseConnection,
   type BootstrapDatabase,
@@ -59,6 +60,13 @@ async function createEncryptedDatabase(
   paths: DatabasePaths,
   password: string,
 ): Promise<BootstrapDatabase> {
+  if (!isValidNewPassword(password)) {
+    throw new FinanceHubError(
+      ERROR_CODES.invalidPassword,
+      '新主密碼須為 8 至 64 個半形英文、數字或特殊符號。',
+    );
+  }
+
   const format = currentEncryptionFormat();
   const salt = randomBytes(format.saltLength);
   const keys = await deriveKeys(password, salt, format);

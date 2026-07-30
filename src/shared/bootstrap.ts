@@ -31,6 +31,9 @@ export interface BootstrapStatus {
   appName: string;
   databaseReady: boolean;
   databaseState: 'setup_required' | 'locked' | 'unlocked';
+  databaseDirectory: string;
+  databaseFileName: string;
+  metadataFileName: string;
   storagePolicy: 'sample-data-only';
 }
 

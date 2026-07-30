@@ -22,13 +22,13 @@ const packagedAsarPath = path.resolve(
   'app.asar',
 );
 const TEST_ONLY_PASSWORDS = [
-  'S3 core fixed password only',
-  'S3 core wrong password only',
+  'S3-Core-Fixed-Password!',
+  'S3-Core-Wrong-Password!',
   'S3 controller password only',
-  'S3 Electron password only',
-  'S3 browser password only',
+  'S3-Electron-Password!',
+  'S3-Browser-Password!',
   'FinanceHub v1 fixture password for fake data only',
-  'S3 installed acceptance password only',
+  'S3-Installed-Acceptance!',
 ];
 
 async function main() {

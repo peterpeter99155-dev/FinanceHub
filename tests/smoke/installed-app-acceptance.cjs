@@ -11,7 +11,7 @@ const installedExecutable = path.join(
   'app-0.1.0',
   'FinanceHub.exe',
 );
-const TEST_PASSWORD = 'S3 installed acceptance password only';
+const TEST_PASSWORD = 'S3-Installed-Acceptance!';
 const TEST_ITEM_NAME = '安裝驗收銀行';
 const TEST_ITEM_AMOUNT = '24680';
 
@@ -38,7 +38,7 @@ async function main() {
         .getByTestId('security-password-confirmation')
         .fill(TEST_PASSWORD);
       await page
-        .getByLabel('我了解這兩種情況都無法復原資料')
+        .getByLabel('我了解必須記住密碼，並一起備份兩個資料檔案')
         .check();
       await page
         .getByRole('button', { name: '建立加密資料庫' })

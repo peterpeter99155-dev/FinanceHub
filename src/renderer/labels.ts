@@ -12,7 +12,8 @@ export const SECURITY_LABELS = {
   unlockTitle: '解鎖 FinanceHub',
   password: '主密碼',
   confirmPassword: '再次輸入主密碼',
-  acknowledgeRecoveryRisk: '我了解這兩種情況都無法復原資料',
+  acknowledgeRecoveryRisk:
+    '我了解必須記住密碼，並一起備份兩個資料檔案',
   createAndContinue: '建立加密資料庫',
   unlockAndContinue: '解鎖',
 } as const;

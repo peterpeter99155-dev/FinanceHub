@@ -16,7 +16,7 @@ const executablePath = path.resolve(
   'electron.exe',
 );
 const applicationEntry = path.resolve('.webpack', 'x64', 'main');
-const TEST_PASSWORD = 'S3 Electron password only';
+const TEST_PASSWORD = 'S3-Electron-Password!';
 
 test('completes the Sprint 01 net-worth flow and persists data', async () => {
   const userDataDirectory = mkdtempSync(
@@ -258,9 +258,18 @@ async function setupDatabase(
     page.getByRole('heading', { name: '設定主密碼' }),
   ).toBeVisible();
   await expect(password).toBeFocused();
+  await expect(
+    page.getByText(userDataDirectory, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('financehub.db', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('financehub.db.metadata.json', { exact: true }),
+  ).toBeVisible();
 
   await password.fill(TEST_PASSWORD);
-  await confirmation.fill(`${TEST_PASSWORD} mismatch`);
+  await confirmation.fill(`${TEST_PASSWORD}-Mismatch`);
   await page
     .getByRole('button', { name: '建立加密資料庫' })
     .click();
@@ -279,7 +288,7 @@ async function setupDatabase(
   expectFinancialFilesNotToExist(userDataDirectory);
 
   await page
-    .getByLabel('我了解這兩種情況都無法復原資料')
+    .getByLabel('我了解必須記住密碼，並一起備份兩個資料檔案')
     .check();
   await page
     .getByRole('button', { name: '建立加密資料庫' })

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-const TEST_PASSWORD = 'S3 browser password only';
+const TEST_PASSWORD = 'S3-Browser-Password!';
 
 test('locked screen exposes no financial data and supports retry', async ({
   page,
@@ -42,12 +42,51 @@ test('setup requires matching passwords and recovery acknowledgement', async ({
     'security-password-confirmation',
   );
   await expect(password).toBeFocused();
-  await expect(page.getByText(/忘記主密碼/)).toBeVisible();
-  await expect(page.getByText(/遺失.*metadata/)).toBeVisible();
-  await expect(page.getByText(/多個不相關詞/)).toBeVisible();
+  await expect(password).toHaveAttribute(
+    'placeholder',
+    '8 至 64 個半形英文、數字或特殊符號',
+  );
+  await expect(confirmation).toHaveAttribute(
+    'placeholder',
+    '請再輸入一次相同密碼',
+  );
+  await expect(page.getByText('financehub.db', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('financehub.db.metadata.json', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText('C:\\FinanceHub-Test-Data')).toBeVisible();
+  await expect(page.getByText(/忘記密碼/)).toBeVisible();
+  await expect(page.getByText(/遺失上述任一檔案/)).toBeVisible();
 
+  await password.fill('中文 Abc123! 密碼');
+  await expect(password).toHaveValue('Abc123!');
+  await password.fill('a'.repeat(65));
+  await expect(password).toHaveValue('a'.repeat(64));
   await password.fill(TEST_PASSWORD);
-  await confirmation.fill(`${TEST_PASSWORD} mismatch`);
+  const visibilityButton = page
+    .getByRole('button', { name: '顯示密碼' })
+    .first();
+  await expect(visibilityButton).toHaveAttribute(
+    'data-password-visibility',
+    'hidden',
+  );
+  await expect(
+    visibilityButton.getByTestId('password-hidden-icon'),
+  ).toBeVisible();
+  await visibilityButton.click();
+  await expect(password).toHaveAttribute('type', 'text');
+  const hideButton = page.getByRole('button', { name: '隱藏密碼' });
+  await expect(hideButton).toHaveAttribute(
+    'data-password-visibility',
+    'visible',
+  );
+  await expect(
+    hideButton.getByTestId('password-visible-icon'),
+  ).toBeVisible();
+  await hideButton.click();
+  await expect(password).toHaveAttribute('type', 'password');
+
+  await confirmation.fill(`${TEST_PASSWORD}-Mismatch`);
   await page
     .getByRole('button', { name: '建立加密資料庫' })
     .click();
@@ -65,7 +104,7 @@ test('setup requires matching passwords and recovery acknowledgement', async ({
   );
 
   await page
-    .getByLabel('我了解這兩種情況都無法復原資料')
+    .getByLabel('我了解必須記住密碼，並一起備份兩個資料檔案')
     .check();
   await page
     .getByRole('button', { name: '建立加密資料庫' })
