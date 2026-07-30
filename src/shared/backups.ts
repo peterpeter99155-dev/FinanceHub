@@ -15,6 +15,7 @@ export interface BackupStatus {
   readonly lastSuccessfulAt?: string;
   readonly nextAutomaticBackupAt?: string;
   readonly lastError?: BackupIssue;
+  readonly statusWarning?: BackupIssue;
   readonly cleanupWarning?: BackupIssue;
 }
 

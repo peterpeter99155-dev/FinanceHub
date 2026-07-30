@@ -26,6 +26,7 @@ export const ERROR_CODES = {
   backupSourceInvalid: 'BACKUP_SOURCE_INVALID',
   backupFormatInvalid: 'BACKUP_FORMAT_INVALID',
   backupIoFailure: 'BACKUP_IO_FAILURE',
+  backupStatusUpdateFailure: 'BACKUP_STATUS_UPDATE_FAILURE',
 } as const;
 
 export type ErrorCode =

@@ -78,6 +78,38 @@ describe('BackupService', () => {
       },
     });
   });
+
+  it('keeps a published backup successful when status recording fails', async () => {
+    const settings = new MemorySettings();
+    settings.failRecordSuccess = true;
+    const executor = new FakeExecutor();
+    executor.inventory = {
+      validBackupCount: 1,
+      lastSuccessfulAt: '2026-07-30T02:00:00.000Z',
+    };
+    const service = new BackupService(
+      executor, settings, fixedClock(), immediateWrites(),
+    );
+
+    await expect(service.createNow()).resolves.toMatchObject({
+      validBackupCount: 1,
+      lastSuccessfulAt: '2026-07-30T02:00:00.000Z',
+      nextAutomaticBackupAt: '2026-07-31T02:00:00.000Z',
+      statusWarning: {
+        code: ERROR_CODES.backupStatusUpdateFailure,
+        message: '備份檔已建立，但無法更新備份狀態紀錄。',
+      },
+    });
+    expect(executor.createCount).toBe(1);
+    expect(settings.value.lastError).toBeUndefined();
+
+    await expect(service.getStatus()).resolves.toMatchObject({
+      validBackupCount: 1,
+      lastSuccessfulAt: '2026-07-30T02:00:00.000Z',
+      nextAutomaticBackupAt: '2026-07-31T02:00:00.000Z',
+    });
+    expect(executor.createCount).toBe(1);
+  });
 });
 
 class FakeExecutor implements BackupExecutor {
@@ -85,8 +117,10 @@ class FakeExecutor implements BackupExecutor {
   inventory: BackupInventory = { validBackupCount: 0 };
   execution: Promise<{ completedAt: string }> | undefined;
   failure: unknown;
+  createCount = 0;
 
   async createBackup() {
+    this.createCount += 1;
     if (this.failure) throw this.failure;
     return this.execution ??
       { completedAt: '2026-07-30T02:00:00.000Z' };
@@ -102,12 +136,14 @@ class MemorySettings implements BackupSettingsRepository {
     automaticEnabled: true,
     retentionCount: 7,
   };
+  failRecordSuccess = false;
 
   get() {
     return this.value;
   }
 
   recordSuccess(nextAutomaticBackupAt: string) {
+    if (this.failRecordSuccess) throw new Error('simulated settings failure');
     this.value = {
       ...this.value,
       nextAutomaticBackupAt,

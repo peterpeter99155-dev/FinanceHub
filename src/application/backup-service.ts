@@ -16,6 +16,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export class BackupService {
   private running = false;
+  private statusWarning: BackupStatus['statusWarning'];
 
   constructor(
     private readonly executor: BackupExecutor,
@@ -36,8 +37,12 @@ export class BackupService {
       isRunning: this.running,
       validBackupCount: inventory.validBackupCount,
       lastSuccessfulAt: inventory.lastSuccessfulAt,
-      nextAutomaticBackupAt: settings.nextAutomaticBackupAt,
+      nextAutomaticBackupAt: nextBackupAt(
+        inventory.lastSuccessfulAt,
+        settings.nextAutomaticBackupAt,
+      ),
       lastError: settings.lastError,
+      statusWarning: this.statusWarning,
       cleanupWarning: settings.cleanupWarning,
     };
   }
@@ -50,28 +55,55 @@ export class BackupService {
       );
     }
     this.running = true;
+    let completedAt: string;
     try {
       const result = await this.executor.createBackup();
-      await this.writes.runWrite(() =>
-        this.settings.recordSuccess(
-          new Date(Date.parse(result.completedAt) + DAY_MS).toISOString(),
-        ),
-      );
+      completedAt = result.completedAt;
     } catch (error) {
       const code = errorCodeOf(error);
-      await this.writes.runWrite(() =>
-        this.settings.recordFailure({
-          code,
-          message: safeBackupMessage(code),
-          occurredAt: this.clock.now(),
-        }),
-      );
+      try {
+        await this.writes.runWrite(() =>
+          this.settings.recordFailure({
+            code,
+            message: safeBackupMessage(code),
+            occurredAt: this.clock.now(),
+          }),
+        );
+      } finally {
+        this.running = false;
+      }
       throw error;
+    }
+
+    try {
+      await this.writes.runWrite(() =>
+        this.settings.recordSuccess(
+          addDay(completedAt),
+        ),
+      );
+      this.statusWarning = undefined;
+    } catch {
+      this.statusWarning = {
+        code: ERROR_CODES.backupStatusUpdateFailure,
+        message: '備份檔已建立，但無法更新備份狀態紀錄。',
+        occurredAt: this.clock.now(),
+      };
     } finally {
       this.running = false;
     }
     return this.getStatus();
   }
+}
+
+function nextBackupAt(
+  lastSuccessfulAt: string | undefined,
+  storedNextAt: string | undefined,
+): string | undefined {
+  return lastSuccessfulAt ? addDay(lastSuccessfulAt) : storedNextAt;
+}
+
+function addDay(value: string): string {
+  return new Date(Date.parse(value) + DAY_MS).toISOString();
 }
 
 function safeBackupMessage(code: ErrorCode): string {
