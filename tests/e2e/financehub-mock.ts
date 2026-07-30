@@ -99,6 +99,23 @@ function createApi(
       storagePolicy: 'sample-data-only',
     }),
     unlockDatabase: async (password) => security.unlock(password),
+    backups: {
+      getStatus: async () => ({
+        automaticEnabled: true,
+        backupDirectory: 'C:\\FinanceHub-Test-Data\\backups',
+        retentionCount: 7,
+        isRunning: false,
+        validBackupCount: 0,
+      }),
+      createNow: async () => ({
+        automaticEnabled: true,
+        backupDirectory: 'C:\\FinanceHub-Test-Data\\backups',
+        retentionCount: 7,
+        isRunning: false,
+        validBackupCount: 1,
+        lastSuccessfulAt: NOW,
+      }),
+    },
     financialItems: {
       list: async () => financialItemSnapshot(state),
       create: async (draft) => {

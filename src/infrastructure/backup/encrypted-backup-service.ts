@@ -13,6 +13,10 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 
+import type {
+  BackupExecutor,
+  BackupInventory,
+} from '../../application/ports/backup-port';
 import { ERROR_CODES, FinanceHubError } from '../../shared/errors';
 import type { SqliteDatabase } from '../database/sqlite-database';
 import type { DatabaseWriteGate } from '../main/database-write-gate';
@@ -35,11 +39,11 @@ interface CheckpointResult {
   readonly checkpointed: number;
 }
 
-export class EncryptedBackupService {
+export class EncryptedBackupService implements BackupExecutor {
   constructor(
     private readonly database: SqliteDatabase,
     private readonly databasePath: string,
-    private readonly backupRoot: string,
+    readonly backupDirectory: string,
     private readonly applicationVersion: string,
     private readonly gate: DatabaseWriteGate,
     private readonly now: () => Date = () => new Date(),
@@ -58,19 +62,46 @@ export class EncryptedBackupService {
   }
 
   async cleanupIncompleteBackups(): Promise<void> {
-    await mkdir(this.backupRoot, { recursive: true });
-    for (const entry of await readdir(this.backupRoot, { withFileTypes: true })) {
+    await mkdir(this.backupDirectory, { recursive: true });
+    for (const entry of await readdir(this.backupDirectory, { withFileTypes: true })) {
       if (!/^\.creating-[0-9a-f-]{36}$/i.test(entry.name)) continue;
-      const candidate = path.join(this.backupRoot, entry.name);
+      const candidate = path.join(this.backupDirectory, entry.name);
       if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
-      await removeOwnedTemporaryDirectory(this.backupRoot, candidate);
+      await removeOwnedTemporaryDirectory(this.backupDirectory, candidate);
     }
+  }
+
+  async inspectInventory(): Promise<BackupInventory> {
+    await mkdir(this.backupDirectory, { recursive: true });
+    const completedAt: string[] = [];
+    for (const entry of await readdir(this.backupDirectory, {
+      withFileTypes: true,
+    })) {
+      if (!/^backup-[0-9a-f-]{36}$/i.test(entry.name) ||
+          !entry.isDirectory() || entry.isSymbolicLink()) {
+        continue;
+      }
+      try {
+        const manifest = await validateBackupDirectory(
+          path.join(this.backupDirectory, entry.name),
+        );
+        if (backupDirectoryName(manifest.backupId) !== entry.name) continue;
+        completedAt.push(manifest.completedAt);
+      } catch {
+        // Invalid or unknown directories are not counted and are never deleted.
+      }
+    }
+    completedAt.sort();
+    return {
+      validBackupCount: completedAt.length,
+      lastSuccessfulAt: completedAt.at(-1),
+    };
   }
 
   private async createConsistentBackup(): Promise<BackupManifestV1> {
     await assertRegularSourceFile(this.databasePath);
     await assertRegularSourceFile(`${this.databasePath}.metadata.json`);
-    await mkdir(this.backupRoot, { recursive: true });
+    await mkdir(this.backupDirectory, { recursive: true });
     await this.cleanupIncompleteBackups();
 
     const previousBusyTimeout = Number(
@@ -94,11 +125,11 @@ export class EncryptedBackupService {
 
     const backupId = this.makeBackupId();
     const temporaryDirectory = path.join(
-      this.backupRoot,
+      this.backupDirectory,
       creatingDirectoryName(backupId),
     );
     const completedDirectory = path.join(
-      this.backupRoot,
+      this.backupDirectory,
       backupDirectoryName(backupId),
     );
     const createdAt = this.now().toISOString();
@@ -153,7 +184,7 @@ export class EncryptedBackupService {
       return manifest;
     } catch (error) {
       await removeOwnedTemporaryDirectory(
-        this.backupRoot,
+        this.backupDirectory,
         temporaryDirectory,
       ).catch(() => undefined);
       if (error instanceof FinanceHubError) throw error;

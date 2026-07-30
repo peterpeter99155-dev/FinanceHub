@@ -30,7 +30,7 @@ describe('openBootstrapDatabase', () => {
     }[];
 
     expect(migrations.map(({ version }) => version)).toEqual([
-      1, 2, 3, 4, 5,
+      1, 2, 3, 4, 5, 6,
     ]);
     for (const migration of migrations) {
       expect(migration.applied_at).toMatch(
@@ -72,6 +72,26 @@ describe('openBootstrapDatabase', () => {
     ]);
   });
 
+  it('creates singleton backup settings without storing backup success as truth', () => {
+    connection = openBootstrapDatabase(':memory:');
+    expect(connection.database.prepare(
+      `SELECT automatic_enabled, retention_count,
+              next_automatic_backup_at, last_error_code
+       FROM backup_settings WHERE id = 1`,
+    ).get()).toEqual({
+      automatic_enabled: 1,
+      retention_count: 7,
+      next_automatic_backup_at: null,
+      last_error_code: null,
+    });
+    const columns = connection.database.prepare(
+      'PRAGMA table_info(backup_settings)',
+    ).all() as { name: string }[];
+    expect(columns.map(({ name }) => name)).not.toContain(
+      'last_successful_backup_at',
+    );
+  });
+
   it('keeps released migration definitions immutable', () => {
     const source = readFileSync(
       path.resolve(
@@ -91,7 +111,7 @@ describe('openBootstrapDatabase', () => {
     expect(
       createHash('sha256').update(migrationBlock).digest('hex'),
     ).toBe(
-      '77c605085348349d47a8a622456b8534a06587923207844bb92b38bf462f9c62',
+      'de61300b8c25603b7073c94e461f17e6851d9475849c352ee202c4e680ca4ab1',
     );
   });
 
@@ -125,7 +145,7 @@ describe('openBootstrapDatabase', () => {
         .get() as { count: number };
 
       expect(item).toEqual({ name: '測試現金', amount: 1000 });
-      expect(Number(count.count)).toBe(5);
+      expect(Number(count.count)).toBe(6);
     } finally {
       connection?.close();
       connection = undefined;

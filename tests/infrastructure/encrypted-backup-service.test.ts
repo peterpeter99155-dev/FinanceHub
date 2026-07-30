@@ -76,7 +76,7 @@ describe('EncryptedBackupService', () => {
     const manifest = await service.createBackup();
     const directory = path.join(backups, `backup-${manifest.backupId}`);
     expect(await validateBackupDirectory(directory)).toEqual(manifest);
-    expect(manifest.databaseSchemaVersion).toBe(5);
+    expect(manifest.databaseSchemaVersion).toBe(6);
     expect(manifest.encryption).toEqual({ formatVersion: 1, kdfVersion: 1 });
 
     const restored = await openExistingEncryptedDatabase(
@@ -242,6 +242,38 @@ describe('EncryptedBackupService', () => {
     expect(readFileSync(path.join(firstDirectory, 'manifest.json')))
       .toEqual(firstManifest);
     expect(first.backupId).toBe(backupId);
+    connection.close();
+  });
+
+  it('rebuilds count and latest success only from fully validated directories', async () => {
+    const root = temporaryRoot();
+    const databasePath = path.join(root, 'financehub.db');
+    const connection = await openOrCreateEncryptedDatabase(databasePath, PASSWORD);
+    const backups = path.join(root, 'backups');
+    const service = new EncryptedBackupService(
+      connection.database, databasePath, backups, 'test',
+      new DatabaseWriteGate(),
+      () => new Date('2026-07-30T04:00:00.000Z'),
+      () => '55555555-5555-4555-8555-555555555555',
+    );
+    await service.createBackup();
+    const invalid = path.join(
+      backups,
+      'backup-66666666-6666-4666-8666-666666666666',
+    );
+    mkdirSync(invalid);
+    writeFileSync(path.join(invalid, 'manifest.json'), '{}');
+    await expect(service.inspectInventory()).resolves.toEqual({
+      validBackupCount: 1,
+      lastSuccessfulAt: '2026-07-30T04:00:00.000Z',
+    });
+    connection.database.exec(
+      "UPDATE backup_settings SET next_automatic_backup_at = '2099-01-01T00:00:00.000Z'",
+    );
+    await expect(service.inspectInventory()).resolves.toEqual({
+      validBackupCount: 1,
+      lastSuccessfulAt: '2026-07-30T04:00:00.000Z',
+    });
     connection.close();
   });
 });

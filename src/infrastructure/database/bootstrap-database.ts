@@ -166,6 +166,27 @@ const MIGRATIONS: readonly Migration[] = [
         ('expense-other', 'expense', '其他', 1, 1);
     `,
   },
+  {
+    version: 6,
+    sql: `
+      CREATE TABLE backup_settings (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        automatic_enabled INTEGER NOT NULL DEFAULT 1
+          CHECK (automatic_enabled IN (0, 1)),
+        retention_count INTEGER NOT NULL DEFAULT 7
+          CHECK (retention_count IN (3, 7, 14, 30)),
+        next_automatic_backup_at TEXT,
+        last_error_code TEXT,
+        last_error_message TEXT,
+        last_error_at TEXT,
+        cleanup_warning_code TEXT,
+        cleanup_warning_message TEXT,
+        cleanup_warning_at TEXT
+      );
+
+      INSERT INTO backup_settings (id) VALUES (1);
+    `,
+  },
 ] as const;
 
 export interface BootstrapDatabase {

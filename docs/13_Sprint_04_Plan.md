@@ -143,7 +143,7 @@ Manifest v1 欄位固定為：
   "createdAt": "ISO 8601 UTC",
   "completedAt": "ISO 8601 UTC",
   "applicationVersion": "x.y.z",
-  "databaseSchemaVersion": 5,
+  "databaseSchemaVersion": 6,
   "database": {
     "file": "financehub.db",
     "sizeBytes": 0,
@@ -161,8 +161,8 @@ Manifest v1 欄位固定為：
 }
 ```
 
-上例的 `databaseSchemaVersion: 5` 只表示目前資料庫的實際最高
-migration；實作不得把 `5` 寫成固定值。
+上例的 `databaseSchemaVersion: 6` 只表示目前資料庫在加入備份設定
+migration 後的實際最高版本；實作不得把 `6` 寫成固定值。
 
 ### 8. 自動備份與介面範圍
 

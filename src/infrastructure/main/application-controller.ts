@@ -1,4 +1,5 @@
 import { CategoryService } from '../../application/category-service';
+import { BackupService } from '../../application/backup-service';
 import path from 'node:path';
 import { FinancialItemCustomTypeService } from '../../application/financial-item-custom-type-service';
 import { FinancialItemService } from '../../application/financial-item-service';
@@ -10,6 +11,8 @@ import {
 import { FinanceHubError, ERROR_CODES } from '../../shared/errors';
 import type { BootstrapDatabase } from '../database/bootstrap-database';
 import { openOrCreateEncryptedDatabase } from '../database/encrypted-database';
+import { EncryptedBackupService } from '../backup/encrypted-backup-service';
+import { SqliteBackupSettingsRepository } from '../database/sqlite-backup-settings-repository';
 import { SqliteCategoryRepository } from '../database/sqlite-category-repository';
 import { SqliteFinancialItemCustomTypeRepository } from '../database/sqlite-financial-item-custom-type-repository';
 import { SqliteFinancialItemRepository } from '../database/sqlite-financial-item-repository';
@@ -19,6 +22,7 @@ import {
   inspectDatabaseFiles,
 } from '../security/database-metadata';
 import { DatabaseWriteGate } from './database-write-gate';
+import { systemClock } from '../../application/ports/clock';
 
 export type IpcOperation = (...args: readonly unknown[]) => unknown;
 
@@ -55,6 +59,7 @@ export class ApplicationController {
       openOrCreateEncryptedDatabase,
     private readonly createServices: ServiceFactory =
       createFinancialServices,
+    private readonly applicationVersion = '0.1.0',
   ) {}
 
   registerLockedHandlers(): void {
@@ -113,7 +118,25 @@ export class ApplicationController {
       );
       const services = this.createServices(connection);
       const writeGate = new DatabaseWriteGate(100);
-      registerFinancialHandlers(this.registry, services, writeGate);
+      const backupExecutor = new EncryptedBackupService(
+        connection.database,
+        this.databasePath,
+        path.join(path.dirname(this.databasePath), 'backups'),
+        this.applicationVersion,
+        writeGate,
+      );
+      const backups = new BackupService(
+        backupExecutor,
+        new SqliteBackupSettingsRepository(connection.database),
+        systemClock,
+        writeGate,
+      );
+      registerFinancialHandlers(
+        this.registry,
+        services,
+        writeGate,
+        backups,
+      );
       this.connection = connection;
       this.writeGate = writeGate;
       this.state = 'unlocked';
@@ -182,6 +205,7 @@ function registerFinancialHandlers(
   registry: IpcHandlerRegistry,
   services: FinancialServices,
   writeGate: DatabaseWriteGate,
+  backups: BackupService,
 ): void {
   registry.handle(IPC_CHANNELS.listFinancialItems, () =>
     services.financialItems.list(),
@@ -283,5 +307,11 @@ function registerFinancialHandlers(
     (id: unknown, year: unknown, month: unknown) => writeGate.runWrite(
       () => services.transactions.delete(id, year, month),
     ),
+  );
+  registry.handle(IPC_CHANNELS.getBackupStatus, () =>
+    backups.getStatus(),
+  );
+  registry.handle(IPC_CHANNELS.createBackupNow, () =>
+    backups.createNow(),
   );
 }

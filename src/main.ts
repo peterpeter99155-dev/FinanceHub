@@ -59,6 +59,9 @@ void app.whenReady().then(() => {
   controller = new ApplicationController(
     databasePath,
     ipcRegistry,
+    undefined,
+    undefined,
+    app.getVersion(),
   );
   controller.registerLockedHandlers();
   createWindow();

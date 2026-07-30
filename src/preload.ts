@@ -22,6 +22,7 @@ import type {
 import {
   type IpcResult,
 } from './shared/ipc-result';
+import type { BackupStatus } from './shared/backups';
 
 async function invoke<T>(
   channel: string,
@@ -162,6 +163,12 @@ const financeHubApi: FinanceHubApi = Object.freeze({
         year,
         month,
       ),
+  }),
+  backups: Object.freeze({
+    getStatus: () =>
+      invoke<BackupStatus>(IPC_CHANNELS.getBackupStatus),
+    createNow: () =>
+      invoke<BackupStatus>(IPC_CHANNELS.createBackupNow),
   }),
 });
 

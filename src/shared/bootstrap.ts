@@ -4,6 +4,7 @@ import type {
   FinancialItemCustomTypesApi,
 } from './management';
 import type { TransactionsApi } from './transactions';
+import type { BackupsApi } from './backups';
 
 export const IPC_CHANNELS = {
   getBootstrapStatus: 'app:get-bootstrap-status',
@@ -25,6 +26,8 @@ export const IPC_CHANNELS = {
   createTransaction: 'transactions:create',
   updateTransaction: 'transactions:update',
   deleteTransaction: 'transactions:delete',
+  getBackupStatus: 'backups:get-status',
+  createBackupNow: 'backups:create-now',
 } as const;
 
 export interface BootstrapStatus {
@@ -44,4 +47,5 @@ export interface FinanceHubApi {
   categories: CategoriesApi;
   financialItemCustomTypes: FinancialItemCustomTypesApi;
   transactions: TransactionsApi;
+  backups: BackupsApi;
 }
