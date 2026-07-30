@@ -3,7 +3,7 @@
 - 日期：2026-07-29
 - 分支：`codex/sprint-03`
 - 範圍：S3-00～S3-42
-- 結果：實作與驗證完成，尚未合併 `main`
+- 結果：實作與驗證完成，核准合併 `main`
 
 ## 1. 完成內容
 
@@ -60,7 +60,8 @@ Node 測試與 Electron 42 使用不同 ABI。為避免先跑 Node 測試、
 | page size | 4096 bytes |
 | 密碼處理 | 不 trim，Unicode NFC 後編碼為 UTF-8 |
 | 格式上限 | 1024 Unicode scalar values、4096 UTF-8 bytes |
-| 產品最低長度 | 8 Unicode scalar values |
+| 新設定密碼產品限制 | 8 至 64 個半形英文、數字或特殊符號 |
+| 既有資料庫解鎖相容性 | Unicode、上限 1024 scalar values |
 
 sidecar 只保存 `formatVersion`、`kdfVersion`、salt 與 key
 verifier。完整 KDF/cipher 參數只存在程式內建可信版本表，攻擊者
@@ -135,6 +136,18 @@ renderer 的 `SecurityGate` 在解鎖前完全不掛載財務 `App`。
 元件、帳戶名稱或交易入口。密碼欄位焦點使用 `useLayoutEffect`，
 沒有以 `setTimeout` 協調狀態或焦點。
 
+首次設定介面在收尾階段依 DEC-034 更新：
+
+- 主密碼與確認欄位以眼睛圖示切換顯示／隱藏。
+- 新密碼只接受 8 至 64 個半形英文、數字或特殊符號；renderer
+  阻擋不合規輸入，main 建立資料庫前另有獨立驗證。
+- 解鎖既有資料庫不套用新限制。測試以中文且超過 64 個的舊密碼
+  建立資料庫，再由新版正式解鎖路徑開啟並讀取 schema。
+- 畫面顯示 Electron 實際 `userData` 位置，以及必須一起備份的
+  `financehub.db` 與 `financehub.db.metadata.json`。
+- 警告改以一般使用者可理解的文字說明忘記密碼與遺失任一檔案
+  都無法復原。
+
 ## 8. 相容性 fixture
 
 `tests/fixtures/encryption-v1` 保存固定、完全是假資料的 v1 加密
@@ -170,12 +183,29 @@ fixture 到暫存目錄再開啟，避免 migration 修改提交的基準檔。
 結果：全部通過。驗收資料目錄完成後已刪除。這是自動化輔助的
 實際安裝端操作驗收，不是人工目視點擊，也不是瀏覽器 mock。
 
+2026-07-30 合併前以登入介面收尾後的最新安裝檔重新驗收。第一次
+執行時，Squirrel 因已安裝版本同為 `0.1.0` 而保留 2026-07-29
+的舊程式，造成新版確認文案找不到；這不是產品程式紅燈。確認安裝
+檔與既有程式時間後，正常卸載舊版並乾淨安裝最新 `0.1.0`，再跑
+相同步驟，結果全部通過：
+
+```text
+Installed application acceptance passed.
+First launch: master password configured
+Created item: 安裝驗收銀行, TWD 24,680
+Application closed normally: true
+Second launch: locked screen shown before financial data
+Unlock succeeded: true
+Persisted item verified: 安裝驗收銀行, TWD 24,680
+Database and metadata sidecar both present: true
+```
+
 ## 10. 完整驗證
 
 ```text
 typecheck: passed
 lint: passed
-unit: 20 files, 111 tests passed
+unit: 21 files, 118 tests passed
 browser e2e: 7 passed
 package smoke: passed
 make: passed
@@ -199,6 +229,16 @@ run-10=passed
 ```
 
 未出現間歇失敗，沒有增加等待或延長 timeout。
+
+合併前使用登入介面收尾後的同一份最新 package 再執行一次：
+
+```text
+Electron: 10/10 passed
+package smoke: passed
+production bundle test-password matches: 0
+make: passed
+clean installed application acceptance: passed
+```
 
 ## 11. S3-41 九個問題
 
@@ -229,8 +269,9 @@ run-10=passed
   步驟，原財務流程斷言保留。
 - E2E mock、package smoke 與測試生命週期有配合安全閘門的修改。
 - preload 的 `FinanceHubApi` 新增 `unlockDatabase`；
-  `BootstrapStatus` 新增 `databaseState`。這是既有 renderer 對 main
-  介面的明確變更，不是公開網路 API。
+  `BootstrapStatus` 新增 `databaseState`、實際資料目錄與兩個備份
+  檔名。這是既有 renderer 對 main 的介面明確變更，不是公開網路
+  API。
 - 資料庫驅動型別與 import 在 infrastructure 內更新，上層介面不變。
 
 ### 3. 新增邏輯放在哪一層？
