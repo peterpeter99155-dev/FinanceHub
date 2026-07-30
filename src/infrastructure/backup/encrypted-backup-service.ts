@@ -52,7 +52,7 @@ export class EncryptedBackupService {
         return await this.createConsistentBackup();
       } catch (error) {
         if (error instanceof FinanceHubError) throw error;
-        throw backupIoFailure(error);
+        throw backupIoFailure();
       }
     });
   }
@@ -157,18 +157,15 @@ export class EncryptedBackupService {
         temporaryDirectory,
       ).catch(() => undefined);
       if (error instanceof FinanceHubError) throw error;
-      throw backupIoFailure(error);
+      throw backupIoFailure();
     }
   }
 }
 
-function backupIoFailure(error: unknown): FinanceHubError {
+function backupIoFailure(): FinanceHubError {
   return new FinanceHubError(
     ERROR_CODES.backupIoFailure,
     '建立備份時發生檔案系統錯誤。',
-    {
-      cause: error instanceof Error ? error.message : String(error),
-    },
   );
 }
 

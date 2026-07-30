@@ -63,4 +63,30 @@ describe('DatabaseWriteGate', () => {
       (error: unknown) => errorCodeOf(error) === ERROR_CODES.databaseLocked,
     );
   });
+
+  it('waits for an accepted backup during normal shutdown', async () => {
+    const gate = new DatabaseWriteGate();
+    const events: string[] = [];
+    let releaseBackup!: () => void;
+    const backup = gate.runBackup(async () => {
+      events.push('backup-started');
+      await new Promise<void>((resolve) => { releaseBackup = resolve; });
+      events.push('backup-published');
+    });
+    let shutdownCompleted = false;
+    const shutdown = gate.closeAndDrain().then(() => {
+      shutdownCompleted = true;
+      events.push('shutdown-completed');
+    });
+    await Promise.resolve();
+    expect(shutdownCompleted).toBe(false);
+    expect(events).toEqual(['backup-started']);
+    releaseBackup();
+    await Promise.all([backup, shutdown]);
+    expect(events).toEqual([
+      'backup-started',
+      'backup-published',
+      'shutdown-completed',
+    ]);
+  });
 });

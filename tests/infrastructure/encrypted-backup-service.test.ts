@@ -22,6 +22,7 @@ import { EncryptedBackupService } from '../../src/infrastructure/backup/encrypte
 import { validateBackupDirectory } from '../../src/infrastructure/backup/backup-format';
 import { DatabaseWriteGate } from '../../src/infrastructure/main/database-write-gate';
 import { errorCodeOf, ERROR_CODES } from '../../src/shared/errors';
+import { toIpcResult } from '../../src/shared/ipc-result';
 
 const PASSWORD = 'S4-Backup-Test-Password!';
 const roots: string[] = [];
@@ -214,9 +215,10 @@ describe('EncryptedBackupService', () => {
       connection.database, databasePath, unusableRoot, 'test',
       new DatabaseWriteGate(),
     );
-    await expect(service.createBackup()).rejects.toSatisfy(
-      (error: unknown) => errorCodeOf(error) === ERROR_CODES.backupIoFailure,
-    );
+    expect(await toIpcResult(() => service.createBackup())).toEqual({
+      ok: false,
+      code: ERROR_CODES.backupIoFailure,
+    });
     expect(readFileSync(databasePath)).toEqual(before);
     connection.close();
   });

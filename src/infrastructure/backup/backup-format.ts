@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { readFile, stat } from 'node:fs/promises';
+import { lstat, readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import { ERROR_CODES, FinanceHubError } from '../../shared/errors';
@@ -59,6 +59,7 @@ export async function describeBackupFile(
 export async function validateBackupDirectory(
   directory: string,
 ): Promise<BackupManifestV1> {
+  await validateExactBackupEntries(directory);
   let value: unknown;
   try {
     value = JSON.parse(
@@ -77,6 +78,43 @@ export async function validateBackupDirectory(
     throw invalidBackupFormat();
   }
   return manifest;
+}
+
+async function validateExactBackupEntries(directory: string): Promise<void> {
+  try {
+    const directoryInfo = await lstat(directory);
+    if (!directoryInfo.isDirectory() || directoryInfo.isSymbolicLink()) {
+      throw invalidBackupFormat();
+    }
+    const expected = new Set([
+      BACKUP_DATABASE_FILE,
+      BACKUP_METADATA_FILE,
+      BACKUP_MANIFEST_FILE,
+    ]);
+    const entries = await readdir(directory, { withFileTypes: true });
+    if (entries.length !== expected.size) throw invalidBackupFormat();
+    for (const entry of entries) {
+      if (
+        !expected.has(entry.name) ||
+        !entry.isFile() ||
+        entry.isSymbolicLink()
+      ) {
+        throw invalidBackupFormat();
+      }
+      const info = await lstat(path.join(directory, entry.name));
+      if (!info.isFile() || info.isSymbolicLink()) {
+        throw invalidBackupFormat();
+      }
+    }
+  } catch (error) {
+    if (
+      error instanceof FinanceHubError &&
+      error.code === ERROR_CODES.backupFormatInvalid
+    ) {
+      throw error;
+    }
+    throw invalidBackupFormat();
+  }
 }
 
 export function parseBackupManifest(value: unknown): BackupManifestV1 {
