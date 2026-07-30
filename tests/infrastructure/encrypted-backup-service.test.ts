@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -355,6 +356,56 @@ describe('EncryptedBackupService', () => {
     for (const id of ids) {
       expect(existsSync(path.join(backups, `backup-${id}`))).toBe(true);
     }
+    connection.close();
+  });
+
+  it('retains a valid replacement when cleanup identity changes before rename', async () => {
+    const root = temporaryRoot();
+    const databasePath = path.join(root, 'financehub.db');
+    const connection = await openOrCreateEncryptedDatabase(databasePath, PASSWORD);
+    const backups = path.join(root, 'backups');
+    const ids = [
+      '91111111-1111-4111-8111-111111111111',
+      '92222222-2222-4222-8222-222222222222',
+      '93333333-3333-4333-8333-333333333333',
+      '94444444-4444-4444-8444-444444444444',
+    ];
+    let idIndex = 0;
+    let timestamp = Date.parse('2026-07-01T00:00:00.000Z');
+    const moveWithReplacement = async (source: string, target: string) => {
+      const heldOriginal = path.join(backups, 'held-original');
+      const replacement = path.join(backups, `backup-${ids[3]}`);
+      renameSync(source, heldOriginal);
+      renameSync(replacement, source);
+      renameSync(source, target);
+    };
+    const service = new EncryptedBackupService(
+      connection.database, databasePath, backups, 'test',
+      new DatabaseWriteGate(),
+      () => new Date(timestamp += 1000),
+      () => ids[idIndex++],
+      moveWithReplacement,
+    );
+    for (let index = 0; index < ids.length; index += 1) {
+      await service.createBackup();
+    }
+
+    await expect(service.pruneBackups(3)).rejects.toMatchObject({
+      code: ERROR_CODES.backupCleanupFailure,
+    });
+
+    const heldOriginal = path.join(backups, 'held-original');
+    const quarantine = path.join(backups, `.deleting-${ids[0]}`);
+    expect(existsSync(heldOriginal)).toBe(true);
+    expect(existsSync(quarantine)).toBe(true);
+    expect(readdirSync(quarantine).sort()).toEqual([
+      'financehub.db',
+      'financehub.db.metadata.json',
+      'manifest.json',
+    ]);
+    await expect(validateBackupDirectory(quarantine)).resolves.toMatchObject({
+      backupId: ids[3],
+    });
     connection.close();
   });
 });

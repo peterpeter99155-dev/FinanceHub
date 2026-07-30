@@ -39,6 +39,8 @@ interface CheckpointResult {
   readonly checkpointed: number;
 }
 
+type MoveDirectory = (source: string, target: string) => Promise<void>;
+
 export class EncryptedBackupService implements BackupExecutor {
   constructor(
     private readonly database: SqliteDatabase,
@@ -48,6 +50,7 @@ export class EncryptedBackupService implements BackupExecutor {
     private readonly gate: DatabaseWriteGate,
     private readonly now: () => Date = () => new Date(),
     private readonly makeBackupId: () => string = createBackupId,
+    private readonly moveForCleanup: MoveDirectory = rename,
   ) {}
 
   createBackup(): Promise<BackupManifestV1> {
@@ -90,6 +93,7 @@ export class EncryptedBackupService implements BackupExecutor {
           this.backupDirectory,
           backup.directory,
           backup.manifest,
+          this.moveForCleanup,
         );
       } catch {
         throw new FinanceHubError(
@@ -296,6 +300,7 @@ async function quarantineAndDeleteBackup(
   root: string,
   candidate: string,
   expectedManifest: BackupManifestV1,
+  moveDirectory: MoveDirectory,
 ): Promise<void> {
   const manifest = await validateBackupDirectory(candidate);
   if (
@@ -325,8 +330,11 @@ async function quarantineAndDeleteBackup(
     root,
     `.deleting-${manifest.backupId}`,
   );
-  await rename(candidate, quarantine);
-  await validateBackupDirectory(quarantine);
+  await moveDirectory(candidate, quarantine);
+  const quarantinedManifest = await validateBackupDirectory(quarantine);
+  if (!sameManifest(quarantinedManifest, expectedManifest)) {
+    throw new Error('backup identity changed during cleanup');
+  }
   for (const file of [
     BACKUP_DATABASE_FILE,
     BACKUP_METADATA_FILE,
@@ -340,4 +348,33 @@ async function quarantineAndDeleteBackup(
     await rm(target);
   }
   await rmdir(quarantine);
+}
+
+function sameManifest(
+  left: BackupManifestV1,
+  right: BackupManifestV1,
+): boolean {
+  return (
+    left.formatVersion === right.formatVersion &&
+    left.backupId === right.backupId &&
+    left.createdAt === right.createdAt &&
+    left.completedAt === right.completedAt &&
+    left.applicationVersion === right.applicationVersion &&
+    left.databaseSchemaVersion === right.databaseSchemaVersion &&
+    sameFile(left.database, right.database) &&
+    sameFile(left.metadata, right.metadata) &&
+    left.encryption.formatVersion === right.encryption.formatVersion &&
+    left.encryption.kdfVersion === right.encryption.kdfVersion
+  );
+}
+
+function sameFile(
+  left: BackupManifestV1['database'],
+  right: BackupManifestV1['database'],
+): boolean {
+  return (
+    left.file === right.file &&
+    left.sizeBytes === right.sizeBytes &&
+    left.sha256 === right.sha256
+  );
 }
