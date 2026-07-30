@@ -141,6 +141,7 @@ export class ApplicationController {
       this.writeGate = writeGate;
       this.state = 'unlocked';
       this.registry.removeHandler(IPC_CHANNELS.unlockDatabase);
+      void backups.attemptAutomaticAfterUnlock().catch(() => undefined);
     } catch (error) {
       connection?.close();
       this.state = 'locked';
@@ -313,5 +314,14 @@ function registerFinancialHandlers(
   );
   registry.handle(IPC_CHANNELS.createBackupNow, () =>
     backups.createNow(),
+  );
+  registry.handle(
+    IPC_CHANNELS.setAutomaticBackupEnabled,
+    (enabled: unknown) => backups.setAutomaticEnabled(enabled),
+  );
+  registry.handle(
+    IPC_CHANNELS.setBackupRetentionCount,
+    (retentionCount: unknown) =>
+      backups.setRetentionCount(retentionCount),
   );
 }

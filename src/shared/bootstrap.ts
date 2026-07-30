@@ -28,6 +28,8 @@ export const IPC_CHANNELS = {
   deleteTransaction: 'transactions:delete',
   getBackupStatus: 'backups:get-status',
   createBackupNow: 'backups:create-now',
+  setAutomaticBackupEnabled: 'backups:set-automatic-enabled',
+  setBackupRetentionCount: 'backups:set-retention-count',
 } as const;
 
 export interface BootstrapStatus {

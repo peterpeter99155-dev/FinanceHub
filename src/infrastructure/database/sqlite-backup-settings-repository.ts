@@ -63,6 +63,42 @@ implements BackupSettingsRepository {
       WHERE id = 1
     `).run(value.code, value.message, value.occurredAt);
   }
+
+  setAutomaticEnabled(enabled: boolean): void {
+    this.database.prepare(`
+      UPDATE backup_settings
+      SET automatic_enabled = ?
+      WHERE id = 1
+    `).run(enabled ? 1 : 0);
+  }
+
+  setRetentionCount(retentionCount: 3 | 7 | 14 | 30): void {
+    this.database.prepare(`
+      UPDATE backup_settings
+      SET retention_count = ?
+      WHERE id = 1
+    `).run(retentionCount);
+  }
+
+  recordCleanupWarning(value: StoredBackupIssue): void {
+    this.database.prepare(`
+      UPDATE backup_settings
+      SET cleanup_warning_code = ?,
+          cleanup_warning_message = ?,
+          cleanup_warning_at = ?
+      WHERE id = 1
+    `).run(value.code, value.message, value.occurredAt);
+  }
+
+  clearCleanupWarning(): void {
+    this.database.prepare(`
+      UPDATE backup_settings
+      SET cleanup_warning_code = NULL,
+          cleanup_warning_message = NULL,
+          cleanup_warning_at = NULL
+      WHERE id = 1
+    `).run();
+  }
 }
 
 function issue(

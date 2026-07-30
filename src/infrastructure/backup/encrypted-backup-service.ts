@@ -64,7 +64,9 @@ export class EncryptedBackupService implements BackupExecutor {
   async cleanupIncompleteBackups(): Promise<void> {
     await mkdir(this.backupDirectory, { recursive: true });
     for (const entry of await readdir(this.backupDirectory, { withFileTypes: true })) {
-      if (!/^\.creating-[0-9a-f-]{36}$/i.test(entry.name)) continue;
+      if (!/^\.(creating|deleting)-[0-9a-f-]{36}$/i.test(entry.name)) {
+        continue;
+      }
       const candidate = path.join(this.backupDirectory, entry.name);
       if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
       await removeOwnedTemporaryDirectory(this.backupDirectory, candidate);
@@ -72,8 +74,35 @@ export class EncryptedBackupService implements BackupExecutor {
   }
 
   async inspectInventory(): Promise<BackupInventory> {
+    const backups = await this.validBackups();
+    return {
+      validBackupCount: backups.length,
+      lastSuccessfulAt: backups.at(-1)?.manifest.completedAt,
+    };
+  }
+
+  async pruneBackups(retentionCount: 3 | 7 | 14 | 30): Promise<void> {
+    const backups = await this.validBackups();
+    const expired = backups.slice(0, Math.max(0, backups.length - retentionCount));
+    for (const backup of expired) {
+      try {
+        await quarantineAndDeleteBackup(
+          this.backupDirectory,
+          backup.directory,
+          backup.manifest,
+        );
+      } catch {
+        throw new FinanceHubError(
+          ERROR_CODES.backupCleanupFailure,
+          '新備份已建立，但無法安全清理舊備份。',
+        );
+      }
+    }
+  }
+
+  private async validBackups(): Promise<readonly ValidBackup[]> {
     await mkdir(this.backupDirectory, { recursive: true });
-    const completedAt: string[] = [];
+    const backups: ValidBackup[] = [];
     for (const entry of await readdir(this.backupDirectory, {
       withFileTypes: true,
     })) {
@@ -82,20 +111,19 @@ export class EncryptedBackupService implements BackupExecutor {
         continue;
       }
       try {
-        const manifest = await validateBackupDirectory(
-          path.join(this.backupDirectory, entry.name),
-        );
+        const directory = path.join(this.backupDirectory, entry.name);
+        const manifest = await validateBackupDirectory(directory);
         if (backupDirectoryName(manifest.backupId) !== entry.name) continue;
-        completedAt.push(manifest.completedAt);
+        backups.push({ directory, manifest });
       } catch {
         // Invalid or unknown directories are not counted and are never deleted.
       }
     }
-    completedAt.sort();
-    return {
-      validBackupCount: completedAt.length,
-      lastSuccessfulAt: completedAt.at(-1),
-    };
+    backups.sort((left, right) =>
+      left.manifest.completedAt.localeCompare(right.manifest.completedAt) ||
+      left.manifest.backupId.localeCompare(right.manifest.backupId),
+    );
+    return backups;
   }
 
   private async createConsistentBackup(): Promise<BackupManifestV1> {
@@ -193,6 +221,11 @@ export class EncryptedBackupService implements BackupExecutor {
   }
 }
 
+interface ValidBackup {
+  readonly directory: string;
+  readonly manifest: BackupManifestV1;
+}
+
 function backupIoFailure(): FinanceHubError {
   return new FinanceHubError(
     ERROR_CODES.backupIoFailure,
@@ -257,4 +290,54 @@ async function removeOwnedTemporaryDirectory(
     await rm(path.join(candidate, file), { force: true });
   }
   await rmdir(candidate);
+}
+
+async function quarantineAndDeleteBackup(
+  root: string,
+  candidate: string,
+  expectedManifest: BackupManifestV1,
+): Promise<void> {
+  const manifest = await validateBackupDirectory(candidate);
+  if (
+    manifest.backupId !== expectedManifest.backupId ||
+    backupDirectoryName(manifest.backupId) !== path.basename(candidate)
+  ) {
+    throw new Error('backup changed before cleanup');
+  }
+  const [rootInfo, candidateInfo, resolvedRoot, resolvedCandidate] =
+    await Promise.all([
+      lstat(root),
+      lstat(candidate),
+      realpath(root),
+      realpath(candidate),
+    ]);
+  if (
+    !rootInfo.isDirectory() ||
+    rootInfo.isSymbolicLink() ||
+    !candidateInfo.isDirectory() ||
+    candidateInfo.isSymbolicLink() ||
+    path.dirname(resolvedCandidate) !== resolvedRoot
+  ) {
+    throw new Error('unsafe backup cleanup target');
+  }
+
+  const quarantine = path.join(
+    root,
+    `.deleting-${manifest.backupId}`,
+  );
+  await rename(candidate, quarantine);
+  await validateBackupDirectory(quarantine);
+  for (const file of [
+    BACKUP_DATABASE_FILE,
+    BACKUP_METADATA_FILE,
+    BACKUP_MANIFEST_FILE,
+  ]) {
+    const target = path.join(quarantine, file);
+    const info = await lstat(target);
+    if (!info.isFile() || info.isSymbolicLink()) {
+      throw new Error('unsafe backup file');
+    }
+    await rm(target);
+  }
+  await rmdir(quarantine);
 }

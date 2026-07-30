@@ -169,6 +169,16 @@ const financeHubApi: FinanceHubApi = Object.freeze({
       invoke<BackupStatus>(IPC_CHANNELS.getBackupStatus),
     createNow: () =>
       invoke<BackupStatus>(IPC_CHANNELS.createBackupNow),
+    setAutomaticEnabled: (enabled: boolean) =>
+      invoke<BackupStatus>(
+        IPC_CHANNELS.setAutomaticBackupEnabled,
+        enabled,
+      ),
+    setRetentionCount: (retentionCount: 3 | 7 | 14 | 30) =>
+      invoke<BackupStatus>(
+        IPC_CHANNELS.setBackupRetentionCount,
+        retentionCount,
+      ),
   }),
 });
 

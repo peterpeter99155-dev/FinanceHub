@@ -276,6 +276,87 @@ describe('EncryptedBackupService', () => {
     });
     connection.close();
   });
+
+  it('keeps the newest seven validated backups and never follows unknown links', async () => {
+    const root = temporaryRoot();
+    const databasePath = path.join(root, 'financehub.db');
+    const connection = await openOrCreateEncryptedDatabase(databasePath, PASSWORD);
+    const backups = path.join(root, 'backups');
+    const ids = Array.from({ length: 8 }, (_, index) =>
+      `7000000${index}-0000-4000-8000-00000000000${index}`,
+    );
+    let idIndex = 0;
+    let timestamp = Date.parse('2026-07-01T00:00:00.000Z');
+    const service = new EncryptedBackupService(
+      connection.database, databasePath, backups, 'test',
+      new DatabaseWriteGate(),
+      () => new Date(timestamp += 1000),
+      () => ids[idIndex++],
+    );
+    for (let index = 0; index < 8; index += 1) {
+      await service.createBackup();
+    }
+    const outside = path.join(root, 'outside-retention');
+    mkdirSync(outside);
+    const junction = path.join(
+      backups,
+      'backup-79999999-9999-4999-8999-999999999999',
+    );
+    symlinkSync(outside, junction, 'junction');
+    const unknown = path.join(
+      backups,
+      'backup-78888888-8888-4888-8888-888888888888',
+    );
+    mkdirSync(unknown);
+    writeFileSync(path.join(unknown, 'unknown.txt'), 'keep');
+
+    await service.pruneBackups(7);
+
+    expect(existsSync(path.join(backups, `backup-${ids[0]}`))).toBe(false);
+    for (const id of ids.slice(1)) {
+      expect(existsSync(path.join(backups, `backup-${id}`))).toBe(true);
+    }
+    expect(existsSync(junction)).toBe(true);
+    expect(existsSync(outside)).toBe(true);
+    expect(existsSync(unknown)).toBe(true);
+    await expect(service.inspectInventory()).resolves.toMatchObject({
+      validBackupCount: 7,
+    });
+    connection.close();
+  });
+
+  it('retains the new backup and reports cleanup failure when quarantine is blocked', async () => {
+    const root = temporaryRoot();
+    const databasePath = path.join(root, 'financehub.db');
+    const connection = await openOrCreateEncryptedDatabase(databasePath, PASSWORD);
+    const backups = path.join(root, 'backups');
+    const ids = [
+      '81111111-1111-4111-8111-111111111111',
+      '82222222-2222-4222-8222-222222222222',
+      '83333333-3333-4333-8333-333333333333',
+      '84444444-4444-4444-8444-444444444444',
+    ];
+    let idIndex = 0;
+    let timestamp = Date.parse('2026-07-01T00:00:00.000Z');
+    const service = new EncryptedBackupService(
+      connection.database, databasePath, backups, 'test',
+      new DatabaseWriteGate(),
+      () => new Date(timestamp += 1000),
+      () => ids[idIndex++],
+    );
+    for (let index = 0; index < ids.length; index += 1) {
+      await service.createBackup();
+    }
+    mkdirSync(path.join(backups, `.deleting-${ids[0]}`));
+
+    await expect(service.pruneBackups(3)).rejects.toMatchObject({
+      code: ERROR_CODES.backupCleanupFailure,
+    });
+    for (const id of ids) {
+      expect(existsSync(path.join(backups, `backup-${id}`))).toBe(true);
+    }
+    connection.close();
+  });
 });
 
 function temporaryRoot(): string {

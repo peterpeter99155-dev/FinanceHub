@@ -13,6 +13,7 @@ export interface BackupExecutor {
   readonly backupDirectory: string;
   createBackup(): Promise<BackupExecution>;
   inspectInventory(): Promise<BackupInventory>;
+  pruneBackups(retentionCount: 3 | 7 | 14 | 30): Promise<void>;
 }
 
 export interface BackupSettings {
@@ -33,6 +34,10 @@ export interface BackupSettingsRepository {
   get(): BackupSettings;
   recordSuccess(nextAutomaticBackupAt: string): void;
   recordFailure(issue: StoredBackupIssue): void;
+  setAutomaticEnabled(enabled: boolean): void;
+  setRetentionCount(retentionCount: 3 | 7 | 14 | 30): void;
+  recordCleanupWarning(issue: StoredBackupIssue): void;
+  clearCleanupWarning(): void;
 }
 
 export interface BackupWriteScheduler {

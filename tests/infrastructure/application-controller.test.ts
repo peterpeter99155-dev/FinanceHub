@@ -59,6 +59,8 @@ describe('ApplicationController unlock boundary', () => {
     expect(registry.has(IPC_CHANNELS.listFinancialItems)).toBe(true);
     expect(registry.has(IPC_CHANNELS.getBackupStatus)).toBe(true);
     expect(registry.has(IPC_CHANNELS.createBackupNow)).toBe(true);
+    expect(registry.has(IPC_CHANNELS.setAutomaticBackupEnabled)).toBe(true);
+    expect(registry.has(IPC_CHANNELS.setBackupRetentionCount)).toBe(true);
     expect(registry.has(IPC_CHANNELS.unlockDatabase)).toBe(false);
   });
 });

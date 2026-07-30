@@ -46,5 +46,36 @@ describe('SqliteBackupSettingsRepository', () => {
       message: '部分舊備份尚未清理。',
       occurredAt: '2026-07-30T02:00:00.000Z',
     });
+    repository.clearCleanupWarning();
+    expect(repository.get().cleanupWarning).toBeUndefined();
+  });
+
+  it('updates automatic and retention settings through validated values', () => {
+    connection = openBootstrapDatabase(':memory:');
+    const repository = new SqliteBackupSettingsRepository(connection.database);
+
+    repository.setAutomaticEnabled(false);
+    repository.setRetentionCount(14);
+
+    expect(repository.get()).toMatchObject({
+      automaticEnabled: false,
+      retentionCount: 14,
+    });
+  });
+
+  it('stores a safe cleanup warning', () => {
+    connection = openBootstrapDatabase(':memory:');
+    const repository = new SqliteBackupSettingsRepository(connection.database);
+    repository.recordCleanupWarning({
+      code: ERROR_CODES.backupCleanupFailure,
+      message: '新備份已建立，但無法清理部分舊備份。',
+      occurredAt: '2026-07-30T02:00:00.000Z',
+    });
+
+    expect(repository.get().cleanupWarning).toEqual({
+      code: ERROR_CODES.backupCleanupFailure,
+      message: '新備份已建立，但無法清理部分舊備份。',
+      occurredAt: '2026-07-30T02:00:00.000Z',
+    });
   });
 });

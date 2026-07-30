@@ -115,6 +115,20 @@ function createApi(
         validBackupCount: 1,
         lastSuccessfulAt: NOW,
       }),
+      setAutomaticEnabled: async (enabled) => ({
+        automaticEnabled: enabled,
+        backupDirectory: 'C:\\FinanceHub-Test-Data\\backups',
+        retentionCount: 7,
+        isRunning: false,
+        validBackupCount: 0,
+      }),
+      setRetentionCount: async (retentionCount) => ({
+        automaticEnabled: true,
+        backupDirectory: 'C:\\FinanceHub-Test-Data\\backups',
+        retentionCount,
+        isRunning: false,
+        validBackupCount: 0,
+      }),
     },
     financialItems: {
       list: async () => financialItemSnapshot(state),

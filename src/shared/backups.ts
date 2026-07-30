@@ -22,4 +22,8 @@ export interface BackupStatus {
 export interface BackupsApi {
   getStatus(): Promise<BackupStatus>;
   createNow(): Promise<BackupStatus>;
+  setAutomaticEnabled(enabled: boolean): Promise<BackupStatus>;
+  setRetentionCount(
+    retentionCount: 3 | 7 | 14 | 30,
+  ): Promise<BackupStatus>;
 }

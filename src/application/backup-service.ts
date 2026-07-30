@@ -16,6 +16,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export class BackupService {
   private running = false;
+  private automaticAttempted = false;
   private statusWarning: BackupStatus['statusWarning'];
 
   constructor(
@@ -41,19 +42,64 @@ export class BackupService {
         inventory.lastSuccessfulAt,
         settings.nextAutomaticBackupAt,
       ),
-      lastError: settings.lastError,
+      lastError: currentFailure(
+        settings.lastError,
+        inventory.lastSuccessfulAt,
+      ),
       statusWarning: this.statusWarning,
       cleanupWarning: settings.cleanupWarning,
     };
   }
 
   async createNow(): Promise<BackupStatus> {
+    await this.createBackup();
+    return this.getStatus();
+  }
+
+  async attemptAutomaticAfterUnlock(): Promise<void> {
+    if (this.automaticAttempted || this.running) return;
+    const status = await this.getStatus();
+    if (
+      this.automaticAttempted ||
+      this.running ||
+      !status.automaticEnabled ||
+      !automaticBackupDue(status, this.clock.now())
+    ) {
+      return;
+    }
+    this.automaticAttempted = true;
+    try {
+      await this.createBackup();
+    } catch {
+      // Automatic backup failures are visible in status and do not block unlock.
+    }
+  }
+
+  async setAutomaticEnabled(enabled: unknown): Promise<BackupStatus> {
+    if (typeof enabled !== 'boolean') throw invalidBackupSetting();
+    await this.writes.runWrite(() =>
+      this.settings.setAutomaticEnabled(enabled),
+    );
+    if (enabled) await this.attemptAutomaticAfterUnlock();
+    return this.getStatus();
+  }
+
+  async setRetentionCount(value: unknown): Promise<BackupStatus> {
+    if (value !== 3 && value !== 7 && value !== 14 && value !== 30) {
+      throw invalidBackupSetting();
+    }
+    await this.writes.runWrite(() => this.settings.setRetentionCount(value));
+    return this.getStatus();
+  }
+
+  private async createBackup(): Promise<void> {
     if (this.running) {
       throw new FinanceHubError(
         ERROR_CODES.backupInProgress,
         '已有備份正在進行。',
       );
     }
+    const retentionCount = this.settings.get().retentionCount;
     this.running = true;
     let completedAt: string;
     try {
@@ -75,23 +121,44 @@ export class BackupService {
       throw error;
     }
 
+    let cleanupWarning: BackupStatus['cleanupWarning'];
+    let statusUpdateFailed = false;
+    try {
+      await this.executor.pruneBackups(retentionCount);
+    } catch {
+      cleanupWarning = {
+        code: ERROR_CODES.backupCleanupFailure,
+        message: '新備份已建立，但無法清理部分舊備份。',
+        occurredAt: this.clock.now(),
+      } as const;
+    }
+    try {
+      if (cleanupWarning) {
+        await this.writes.runWrite(() =>
+          this.settings.recordCleanupWarning(cleanupWarning),
+        );
+      } else {
+        await this.writes.runWrite(() =>
+          this.settings.clearCleanupWarning(),
+        );
+      }
+    } catch {
+      statusUpdateFailed = true;
+      this.statusWarning = statusUpdateWarning(this.clock.now());
+    }
+
     try {
       await this.writes.runWrite(() =>
         this.settings.recordSuccess(
           addDay(completedAt),
         ),
       );
-      this.statusWarning = undefined;
+      if (!statusUpdateFailed) this.statusWarning = undefined;
     } catch {
-      this.statusWarning = {
-        code: ERROR_CODES.backupStatusUpdateFailure,
-        message: '備份檔已建立，但無法更新備份狀態紀錄。',
-        occurredAt: this.clock.now(),
-      };
+      this.statusWarning = statusUpdateWarning(this.clock.now());
     } finally {
       this.running = false;
     }
-    return this.getStatus();
   }
 }
 
@@ -104,6 +171,45 @@ function nextBackupAt(
 
 function addDay(value: string): string {
   return new Date(Date.parse(value) + DAY_MS).toISOString();
+}
+
+function automaticBackupDue(
+  status: BackupStatus,
+  now: string,
+): boolean {
+  if (!status.lastSuccessfulAt) return true;
+  return Date.parse(now) >= Date.parse(addDay(status.lastSuccessfulAt));
+}
+
+function currentFailure(
+  failure: BackupStatus['lastError'],
+  lastSuccessfulAt: string | undefined,
+): BackupStatus['lastError'] {
+  if (
+    failure &&
+    lastSuccessfulAt &&
+    Date.parse(failure.occurredAt) <= Date.parse(lastSuccessfulAt)
+  ) {
+    return undefined;
+  }
+  return failure;
+}
+
+function invalidBackupSetting(): FinanceHubError {
+  return new FinanceHubError(
+    ERROR_CODES.invalidInput,
+    '備份設定不正確。',
+  );
+}
+
+function statusUpdateWarning(
+  occurredAt: string,
+): NonNullable<BackupStatus['statusWarning']> {
+  return {
+    code: ERROR_CODES.backupStatusUpdateFailure,
+    message: '備份檔已建立，但無法更新備份狀態紀錄。',
+    occurredAt,
+  };
 }
 
 function safeBackupMessage(code: ErrorCode): string {
