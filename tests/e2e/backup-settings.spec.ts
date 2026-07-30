@@ -15,6 +15,9 @@ test('shows backup state and updates manual backup settings', async ({
   await expect(
     page.getByText('C:\\FinanceHub-Test-Data\\backups'),
   ).toBeVisible();
+  await expect(
+    page.getByText('C:\\FinanceHub-Test-Data', { exact: true }),
+  ).toBeVisible();
 
   await page.getByTestId('backup-now').click();
   await expect(page.getByText('備份狀態正常')).toBeVisible();
@@ -46,6 +49,12 @@ test('shows running, failure and warning states', async ({ page }) => {
   await page.goto('/?backup=running');
   await page.getByRole('button', { name: '資料與備份' }).click();
   await expect(page.getByText('備份進行中…')).toBeVisible();
+  await page.evaluate(() =>
+    window.dispatchEvent(
+      new CustomEvent('financehub-test-backup-complete'),
+    ),
+  );
+  await expect(page.getByText('備份狀態正常')).toBeVisible();
 
   await page.goto('/?backup=warnings');
   await page.getByRole('button', { name: '資料與備份' }).click();

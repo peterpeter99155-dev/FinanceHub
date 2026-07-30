@@ -34,6 +34,22 @@ export function BackupSettingsView() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!status?.isRunning) return;
+    let active = true;
+    void window.financeHub.backups
+      .waitForCurrentBackup()
+      .then((value) => {
+        if (active) setStatus(value);
+      })
+      .catch((caught: unknown) => {
+        if (active) setError(backupErrorMessage(caught));
+      });
+    return () => {
+      active = false;
+    };
+  }, [status?.isRunning]);
+
   async function run(
     kind: BackupAction,
     operation: () => Promise<BackupStatus | void>,
@@ -178,6 +194,10 @@ export function BackupSettingsView() {
               ))}
             </select>
           </label>
+          <div className="backup-location">
+            <span>資料位置</span>
+            <code>{status.dataDirectory}</code>
+          </div>
           <div className="backup-location">
             <span>備份位置</span>
             <code>{status.backupDirectory}</code>

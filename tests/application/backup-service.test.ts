@@ -39,11 +39,13 @@ describe('BackupService', () => {
     );
     const first = service.createNow();
     await expect(service.getStatus()).resolves.toMatchObject({ isRunning: true });
+    const completion = service.waitForCurrentBackup();
     await expect(service.createNow()).rejects.toMatchObject({
       code: ERROR_CODES.backupInProgress,
     });
     release();
     await first;
+    await expect(completion).resolves.toMatchObject({ isRunning: false });
   });
 
   it('resets the 24-hour interval only after success', async () => {
@@ -221,6 +223,7 @@ describe('BackupService', () => {
 });
 
 class FakeExecutor implements BackupExecutor {
+  readonly dataDirectory = 'C:\\safe';
   readonly backupDirectory = 'C:\\safe\\backups';
   inventory: BackupInventory = { validBackupCount: 0 };
   execution: Promise<{ completedAt: string }> | undefined;

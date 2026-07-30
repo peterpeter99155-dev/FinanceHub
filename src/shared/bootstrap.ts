@@ -27,6 +27,7 @@ export const IPC_CHANNELS = {
   updateTransaction: 'transactions:update',
   deleteTransaction: 'transactions:delete',
   getBackupStatus: 'backups:get-status',
+  waitForBackupCompletion: 'backups:wait-for-completion',
   createBackupNow: 'backups:create-now',
   setAutomaticBackupEnabled: 'backups:set-automatic-enabled',
   setBackupRetentionCount: 'backups:set-retention-count',

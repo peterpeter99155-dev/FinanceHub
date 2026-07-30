@@ -42,6 +42,8 @@ interface CheckpointResult {
 type MoveDirectory = (source: string, target: string) => Promise<void>;
 
 export class EncryptedBackupService implements BackupExecutor {
+  readonly dataDirectory: string;
+
   constructor(
     private readonly database: SqliteDatabase,
     private readonly databasePath: string,
@@ -51,7 +53,9 @@ export class EncryptedBackupService implements BackupExecutor {
     private readonly now: () => Date = () => new Date(),
     private readonly makeBackupId: () => string = createBackupId,
     private readonly moveForCleanup: MoveDirectory = rename,
-  ) {}
+  ) {
+    this.dataDirectory = path.dirname(databasePath);
+  }
 
   createBackup(): Promise<BackupManifestV1> {
     return this.gate.runBackup(async () => {

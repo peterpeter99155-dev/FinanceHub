@@ -318,6 +318,9 @@ function registerFinancialHandlers(
   registry.handle(IPC_CHANNELS.getBackupStatus, () =>
     backups.getStatus(),
   );
+  registry.handle(IPC_CHANNELS.waitForBackupCompletion, () =>
+    backups.waitForCurrentBackup(),
+  );
   registry.handle(IPC_CHANNELS.createBackupNow, () =>
     backups.createNow(),
   );

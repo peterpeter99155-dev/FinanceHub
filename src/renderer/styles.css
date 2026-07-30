@@ -747,6 +747,10 @@ form label > small {
   background: #f3f6f4;
 }
 
+.backup-location + .backup-location {
+  margin-top: 10px;
+}
+
 .backup-location code {
   overflow-wrap: anywhere;
   color: #34483d;

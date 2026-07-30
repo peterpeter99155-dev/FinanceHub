@@ -8,6 +8,7 @@ export interface BackupIssue {
 
 export interface BackupStatus {
   readonly automaticEnabled: boolean;
+  readonly dataDirectory: string;
   readonly backupDirectory: string;
   readonly retentionCount: 3 | 7 | 14 | 30;
   readonly isRunning: boolean;
@@ -21,6 +22,7 @@ export interface BackupStatus {
 
 export interface BackupsApi {
   getStatus(): Promise<BackupStatus>;
+  waitForCurrentBackup(): Promise<BackupStatus>;
   createNow(): Promise<BackupStatus>;
   setAutomaticEnabled(enabled: boolean): Promise<BackupStatus>;
   setRetentionCount(

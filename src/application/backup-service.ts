@@ -18,6 +18,7 @@ export class BackupService {
   private running = false;
   private automaticAttempted = false;
   private statusWarning: BackupStatus['statusWarning'];
+  private readonly completionWaiters = new Set<() => void>();
 
   constructor(
     private readonly executor: BackupExecutor,
@@ -33,6 +34,7 @@ export class BackupService {
     ]);
     return {
       automaticEnabled: settings.automaticEnabled,
+      dataDirectory: this.executor.dataDirectory,
       backupDirectory: this.executor.backupDirectory,
       retentionCount: settings.retentionCount,
       isRunning: this.running,
@@ -53,6 +55,15 @@ export class BackupService {
 
   async createNow(): Promise<BackupStatus> {
     await this.createBackup();
+    return this.getStatus();
+  }
+
+  async waitForCurrentBackup(): Promise<BackupStatus> {
+    if (this.running) {
+      await new Promise<void>((resolve) => {
+        this.completionWaiters.add(resolve);
+      });
+    }
     return this.getStatus();
   }
 
@@ -116,7 +127,7 @@ export class BackupService {
           }),
         );
       } finally {
-        this.running = false;
+        this.finishRunningBackup();
       }
       throw error;
     }
@@ -157,8 +168,14 @@ export class BackupService {
     } catch {
       this.statusWarning = statusUpdateWarning(this.clock.now());
     } finally {
-      this.running = false;
+      this.finishRunningBackup();
     }
+  }
+
+  private finishRunningBackup(): void {
+    this.running = false;
+    for (const resolve of this.completionWaiters) resolve();
+    this.completionWaiters.clear();
   }
 }
 

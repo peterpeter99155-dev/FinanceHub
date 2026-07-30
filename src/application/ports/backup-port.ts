@@ -10,6 +10,7 @@ export interface BackupInventory {
 }
 
 export interface BackupExecutor {
+  readonly dataDirectory: string;
   readonly backupDirectory: string;
   createBackup(): Promise<BackupExecution>;
   inspectInventory(): Promise<BackupInventory>;

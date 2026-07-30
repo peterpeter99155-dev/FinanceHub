@@ -91,6 +91,7 @@ function createApi(
 ): FinanceHubApi {
   let backupStatus: BackupStatus = {
     automaticEnabled: true,
+    dataDirectory: 'C:\\FinanceHub-Test-Data',
     backupDirectory: 'C:\\FinanceHub-Test-Data\\backups',
     retentionCount: 7,
     isRunning: false,
@@ -137,6 +138,24 @@ function createApi(
     unlockDatabase: async (password) => security.unlock(password),
     backups: {
       getStatus: async () => backupStatus,
+      waitForCurrentBackup: async () => {
+        if (backupScenario === 'running') {
+          await new Promise<void>((resolve) => {
+            window.addEventListener(
+              'financehub-test-backup-complete',
+              () => resolve(),
+              { once: true },
+            );
+          });
+        }
+        backupStatus = {
+          ...backupStatus,
+          isRunning: false,
+          validBackupCount: Math.max(1, backupStatus.validBackupCount),
+          lastSuccessfulAt: NOW,
+        };
+        return backupStatus;
+      },
       createNow: async () => {
         backupStatus = {
           ...backupStatus,

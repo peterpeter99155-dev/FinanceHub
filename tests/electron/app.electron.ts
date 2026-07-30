@@ -252,6 +252,9 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     await expect(
       page.getByRole('heading', { name: '資料與備份' }),
     ).toBeVisible();
+    await expect(
+      page.getByText(userDataDirectory, { exact: true }),
+    ).toBeVisible();
     const backupButton = page.getByTestId('backup-now');
     await expect(backupButton).toBeEnabled();
     const countBefore = await backupCount(page);
