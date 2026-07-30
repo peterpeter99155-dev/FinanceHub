@@ -16,6 +16,7 @@ declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 
 let mainWindow: BrowserWindow | null = null;
 let controller: ApplicationController | null = null;
+let shutdownStarted = false;
 
 const ipcRegistry: IpcHandlerRegistry = {
   handle: (channel, operation) => {
@@ -69,9 +70,13 @@ void app.whenReady().then(() => {
   });
 });
 
-app.on('before-quit', () => {
-  controller?.close();
+app.on('before-quit', (event) => {
+  if (shutdownStarted || !controller) return;
+  event.preventDefault();
+  shutdownStarted = true;
+  const closingController = controller;
   controller = null;
+  void closingController.close().finally(() => app.quit());
 });
 
 app.on('window-all-closed', () => {

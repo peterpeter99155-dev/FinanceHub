@@ -18,6 +18,7 @@ import {
   databasePaths,
   inspectDatabaseFiles,
 } from '../security/database-metadata';
+import { DatabaseWriteGate } from './database-write-gate';
 
 export type IpcOperation = (...args: readonly unknown[]) => unknown;
 
@@ -44,6 +45,7 @@ type ServiceFactory = (
 
 export class ApplicationController {
   private connection: BootstrapDatabase | undefined;
+  private writeGate: DatabaseWriteGate | undefined;
   private state: 'locked' | 'unlocking' | 'unlocked' = 'locked';
 
   constructor(
@@ -66,9 +68,11 @@ export class ApplicationController {
     );
   }
 
-  close(): void {
+  async close(): Promise<void> {
+    await this.writeGate?.closeAndDrain();
     this.connection?.close();
     this.connection = undefined;
+    this.writeGate = undefined;
     this.state = 'locked';
   }
 
@@ -108,8 +112,10 @@ export class ApplicationController {
         password,
       );
       const services = this.createServices(connection);
-      registerFinancialHandlers(this.registry, services);
+      const writeGate = new DatabaseWriteGate(100);
+      registerFinancialHandlers(this.registry, services, writeGate);
       this.connection = connection;
+      this.writeGate = writeGate;
       this.state = 'unlocked';
       this.registry.removeHandler(IPC_CHANNELS.unlockDatabase);
     } catch (error) {
@@ -175,59 +181,76 @@ function createFinancialServices(
 function registerFinancialHandlers(
   registry: IpcHandlerRegistry,
   services: FinancialServices,
+  writeGate: DatabaseWriteGate,
 ): void {
   registry.handle(IPC_CHANNELS.listFinancialItems, () =>
     services.financialItems.list(),
   );
   registry.handle(
     IPC_CHANNELS.createFinancialItem,
-    (draft: unknown) => services.financialItems.create(draft),
+    (draft: unknown) => writeGate.runWrite(
+      () => services.financialItems.create(draft),
+    ),
   );
   registry.handle(
     IPC_CHANNELS.updateFinancialItem,
-    (id: unknown, draft: unknown) =>
-      services.financialItems.update(id, draft),
+    (id: unknown, draft: unknown) => writeGate.runWrite(
+      () => services.financialItems.update(id, draft),
+    ),
   );
   registry.handle(
     IPC_CHANNELS.deleteFinancialItem,
-    (id: unknown) => services.financialItems.delete(id),
+    (id: unknown) => writeGate.runWrite(
+      () => services.financialItems.delete(id),
+    ),
   );
   registry.handle(IPC_CHANNELS.listCategories, () =>
     services.categories.list(),
   );
   registry.handle(
     IPC_CHANNELS.createCategory,
-    (draft: unknown) => services.categories.create(draft),
+    (draft: unknown) => writeGate.runWrite(
+      () => services.categories.create(draft),
+    ),
   );
   registry.handle(
     IPC_CHANNELS.updateCategory,
-    (id: unknown, draft: unknown) =>
-      services.categories.update(id, draft),
+    (id: unknown, draft: unknown) => writeGate.runWrite(
+      () => services.categories.update(id, draft),
+    ),
   );
   registry.handle(
     IPC_CHANNELS.deleteCategory,
-    (id: unknown) => services.categories.delete(id),
+    (id: unknown) => writeGate.runWrite(
+      () => services.categories.delete(id),
+    ),
   );
   registry.handle(
     IPC_CHANNELS.reassignAndDeleteCategory,
-    (id: unknown, replacementId: unknown) =>
-      services.categories.reassignAndDelete(id, replacementId),
+    (id: unknown, replacementId: unknown) => writeGate.runWrite(
+      () => services.categories.reassignAndDelete(id, replacementId),
+    ),
   );
   registry.handle(IPC_CHANNELS.listFinancialItemCustomTypes, () =>
     services.customTypes.list(),
   );
   registry.handle(
     IPC_CHANNELS.createFinancialItemCustomType,
-    (draft: unknown) => services.customTypes.create(draft),
+    (draft: unknown) => writeGate.runWrite(
+      () => services.customTypes.create(draft),
+    ),
   );
   registry.handle(
     IPC_CHANNELS.updateFinancialItemCustomType,
-    (id: unknown, draft: unknown) =>
-      services.customTypes.update(id, draft),
+    (id: unknown, draft: unknown) => writeGate.runWrite(
+      () => services.customTypes.update(id, draft),
+    ),
   );
   registry.handle(
     IPC_CHANNELS.deleteFinancialItemCustomType,
-    (id: unknown) => services.customTypes.delete(id),
+    (id: unknown) => writeGate.runWrite(
+      () => services.customTypes.delete(id),
+    ),
   );
   registry.handle(
     IPC_CHANNELS.listTransactionsByMonth,
@@ -240,7 +263,9 @@ function registerFinancialHandlers(
       draft: unknown,
       year: unknown,
       month: unknown,
-    ) => services.transactions.create(draft, year, month),
+    ) => writeGate.runWrite(
+      () => services.transactions.create(draft, year, month),
+    ),
   );
   registry.handle(
     IPC_CHANNELS.updateTransaction,
@@ -249,11 +274,14 @@ function registerFinancialHandlers(
       draft: unknown,
       year: unknown,
       month: unknown,
-    ) => services.transactions.update(id, draft, year, month),
+    ) => writeGate.runWrite(
+      () => services.transactions.update(id, draft, year, month),
+    ),
   );
   registry.handle(
     IPC_CHANNELS.deleteTransaction,
-    (id: unknown, year: unknown, month: unknown) =>
-      services.transactions.delete(id, year, month),
+    (id: unknown, year: unknown, month: unknown) => writeGate.runWrite(
+      () => services.transactions.delete(id, year, month),
+    ),
   );
 }

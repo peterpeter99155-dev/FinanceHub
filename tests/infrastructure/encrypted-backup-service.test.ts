@@ -1,0 +1,251 @@
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import {
+  openExistingEncryptedDatabase,
+  openOrCreateEncryptedDatabase,
+} from '../../src/infrastructure/database/encrypted-database';
+import { EncryptedBackupService } from '../../src/infrastructure/backup/encrypted-backup-service';
+import { validateBackupDirectory } from '../../src/infrastructure/backup/backup-format';
+import { DatabaseWriteGate } from '../../src/infrastructure/main/database-write-gate';
+import { errorCodeOf, ERROR_CODES } from '../../src/shared/errors';
+
+const PASSWORD = 'S4-Backup-Test-Password!';
+const roots: string[] = [];
+
+afterEach(() => {
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
+
+describe('EncryptedBackupService', () => {
+  it('backs up latest WAL data, publishes a valid manifest and restores in isolation', async () => {
+    const root = temporaryRoot();
+    const databasePath = path.join(root, 'financehub.db');
+    const backups = path.join(root, 'backups');
+    const connection = await openOrCreateEncryptedDatabase(databasePath, PASSWORD);
+    connection.database.prepare(`
+      INSERT INTO financial_items (
+        id, name, direction, type, amount, status, updated_at,
+        is_active, include_in_net_worth
+      ) VALUES (?, ?, 'asset', 'bank_deposit', ?, 'confirmed', ?, 1, 1)
+    `).run('asset-backup', '備份測試銀行', 50000, new Date().toISOString());
+    connection.database.prepare(`
+      INSERT INTO financial_items (
+        id, name, direction, type, amount, status, updated_at,
+        is_active, include_in_net_worth
+      ) VALUES (?, ?, 'liability', 'loan', ?, 'confirmed', ?, 1, 1)
+    `).run('liability-backup', '備份測試負債', 12000, new Date().toISOString());
+    connection.database.prepare(`
+      INSERT INTO financial_transactions (
+        id, kind, amount, occurred_at, financial_month, source_account_id,
+        destination_account_id, category_id, name, note, created_at, updated_at
+      ) VALUES (?, 'income', ?, ?, '2026-07', NULL, ?, 'income-salary', ?, '', ?, ?)
+    `).run(
+      'transaction-backup',
+      3000,
+      '2026-07-30T00:00:00.000Z',
+      'asset-backup',
+      '備份測試薪資',
+      '2026-07-30T00:00:00.000Z',
+      '2026-07-30T00:00:00.000Z',
+    );
+    expect(existsSync(`${databasePath}-wal`)).toBe(true);
+    expect(statSync(`${databasePath}-wal`).size).toBeGreaterThan(0);
+
+    const service = new EncryptedBackupService(
+      connection.database,
+      databasePath,
+      backups,
+      '0.1.0-test',
+      new DatabaseWriteGate(),
+    );
+    const manifest = await service.createBackup();
+    const directory = path.join(backups, `backup-${manifest.backupId}`);
+    expect(await validateBackupDirectory(directory)).toEqual(manifest);
+    expect(manifest.databaseSchemaVersion).toBe(5);
+    expect(manifest.encryption).toEqual({ formatVersion: 1, kdfVersion: 1 });
+
+    const restored = await openExistingEncryptedDatabase(
+      path.join(directory, 'financehub.db'),
+      PASSWORD,
+    );
+    expect(restored.database.prepare(
+      'SELECT name, amount FROM financial_items WHERE id = ?',
+    ).get('asset-backup')).toEqual({ name: '備份測試銀行', amount: 50000 });
+    expect(restored.database.prepare(
+      'SELECT name, amount FROM financial_transactions WHERE id = ?',
+    ).get('transaction-backup')).toEqual({
+      name: '備份測試薪資',
+      amount: 3000,
+    });
+    expect(restored.database.prepare(`
+      SELECT
+        SUM(CASE WHEN direction = 'asset' THEN amount ELSE 0 END) -
+        SUM(CASE WHEN direction = 'liability' THEN amount ELSE 0 END) AS netWorth
+      FROM financial_items
+      WHERE include_in_net_worth = 1
+    `).get()).toEqual({ netWorth: 38000 });
+    restored.close();
+    connection.close();
+
+    const bytes = readFileSync(path.join(directory, 'financehub.db'));
+    expect(bytes.includes(Buffer.from('備份測試銀行', 'utf8'))).toBe(false);
+    expect(bytes.includes(Buffer.from('備份測試薪資', 'utf8'))).toBe(false);
+    expect(() => {
+      const ordinary = new DatabaseSync(path.join(directory, 'financehub.db'), {
+        readOnly: true,
+      });
+      try {
+        ordinary.prepare('SELECT * FROM sqlite_master').all();
+      } finally {
+        ordinary.close();
+      }
+    }).toThrow(/file is not a database/i);
+  });
+
+  it('fails before copying when a reader keeps checkpoint busy', async () => {
+    const root = temporaryRoot();
+    const databasePath = path.join(root, 'financehub.db');
+    const writer = await openOrCreateEncryptedDatabase(databasePath, PASSWORD);
+    const reader = await openExistingEncryptedDatabase(databasePath, PASSWORD);
+    reader.database.exec('BEGIN');
+    reader.database.prepare('SELECT * FROM financial_items').all();
+    writer.database.prepare(`
+      INSERT INTO financial_items (
+        id, name, direction, type, amount, status, updated_at,
+        is_active, include_in_net_worth
+      ) VALUES ('busy', 'busy', 'asset', 'cash', 1, 'confirmed', ?, 1, 1)
+    `).run(new Date().toISOString());
+    const backups = path.join(root, 'backups');
+    const service = new EncryptedBackupService(
+      writer.database, databasePath, backups, 'test', new DatabaseWriteGate(),
+    );
+    await expect(service.createBackup()).rejects.toSatisfy(
+      (error: unknown) => errorCodeOf(error) === ERROR_CODES.backupCheckpointBusy,
+    );
+    expect(existsSync(backups) ? readdirSync(backups) : []).toEqual([]);
+    reader.database.exec('COMMIT');
+    reader.close();
+    writer.close();
+  });
+
+  it('does not treat missing sidecar as a backup and preserves the database', async () => {
+    const root = temporaryRoot();
+    const databasePath = path.join(root, 'financehub.db');
+    const connection = await openOrCreateEncryptedDatabase(databasePath, PASSWORD);
+    rmSync(`${databasePath}.metadata.json`);
+    const before = readFileSync(databasePath);
+    const service = new EncryptedBackupService(
+      connection.database, databasePath, path.join(root, 'backups'),
+      'test', new DatabaseWriteGate(),
+    );
+    await expect(service.createBackup()).rejects.toSatisfy(
+      (error: unknown) => errorCodeOf(error) === ERROR_CODES.backupSourceInvalid,
+    );
+    expect(readFileSync(databasePath)).toEqual(before);
+    connection.close();
+  });
+
+  it('removes only owned incomplete directories and rejects unknown contents or junctions', async () => {
+    const root = temporaryRoot();
+    const databasePath = path.join(root, 'financehub.db');
+    const connection = await openOrCreateEncryptedDatabase(databasePath, PASSWORD);
+    const backups = path.join(root, 'backups');
+    mkdirSync(backups);
+    const removable = path.join(backups, '.creating-11111111-1111-4111-8111-111111111111');
+    mkdirSync(removable);
+    writeFileSync(path.join(removable, 'financehub.db'), 'partial');
+    const unknown = path.join(backups, '.creating-22222222-2222-4222-8222-222222222222');
+    mkdirSync(unknown);
+    writeFileSync(path.join(unknown, 'unknown.txt'), 'keep');
+    const target = path.join(root, 'outside');
+    mkdirSync(target);
+    const junction = path.join(backups, '.creating-33333333-3333-4333-8333-333333333333');
+    symlinkSync(target, junction, 'junction');
+
+    const service = new EncryptedBackupService(
+      connection.database, databasePath, backups, 'test', new DatabaseWriteGate(),
+    );
+    await service.cleanupIncompleteBackups();
+    expect(existsSync(removable)).toBe(false);
+    expect(existsSync(unknown)).toBe(true);
+    expect(existsSync(junction)).toBe(true);
+    expect(existsSync(target)).toBe(true);
+    connection.close();
+  });
+
+  it('does not publish a backup when copied metadata validation fails', async () => {
+    const root = temporaryRoot();
+    const databasePath = path.join(root, 'financehub.db');
+    const connection = await openOrCreateEncryptedDatabase(databasePath, PASSWORD);
+    writeFileSync(`${databasePath}.metadata.json`, '{}');
+    const backups = path.join(root, 'backups');
+    const service = new EncryptedBackupService(
+      connection.database, databasePath, backups, 'test', new DatabaseWriteGate(),
+    );
+    await expect(service.createBackup()).rejects.toSatisfy(
+      (error: unknown) => errorCodeOf(error) === ERROR_CODES.invalidDatabaseMetadata,
+    );
+    expect(readdirSync(backups)).toEqual([]);
+    connection.close();
+  });
+
+  it('maps an unusable destination to a stable error without changing source data', async () => {
+    const root = temporaryRoot();
+    const databasePath = path.join(root, 'financehub.db');
+    const connection = await openOrCreateEncryptedDatabase(databasePath, PASSWORD);
+    const before = readFileSync(databasePath);
+    const unusableRoot = path.join(root, 'not-a-directory');
+    writeFileSync(unusableRoot, 'occupied');
+    const service = new EncryptedBackupService(
+      connection.database, databasePath, unusableRoot, 'test',
+      new DatabaseWriteGate(),
+    );
+    await expect(service.createBackup()).rejects.toSatisfy(
+      (error: unknown) => errorCodeOf(error) === ERROR_CODES.backupIoFailure,
+    );
+    expect(readFileSync(databasePath)).toEqual(before);
+    connection.close();
+  });
+
+  it('does not overwrite an existing backup when backupId collides', async () => {
+    const root = temporaryRoot();
+    const databasePath = path.join(root, 'financehub.db');
+    const connection = await openOrCreateEncryptedDatabase(databasePath, PASSWORD);
+    const backupId = '44444444-4444-4444-8444-444444444444';
+    const service = new EncryptedBackupService(
+      connection.database, databasePath, path.join(root, 'backups'), 'test',
+      new DatabaseWriteGate(), () => new Date('2026-07-30T00:00:00.000Z'),
+      () => backupId,
+    );
+    const first = await service.createBackup();
+    const firstDirectory = path.join(root, 'backups', `backup-${backupId}`);
+    const firstManifest = readFileSync(path.join(firstDirectory, 'manifest.json'));
+    await expect(service.createBackup()).rejects.toSatisfy(
+      (error: unknown) => errorCodeOf(error) === ERROR_CODES.backupIoFailure,
+    );
+    expect(readFileSync(path.join(firstDirectory, 'manifest.json')))
+      .toEqual(firstManifest);
+    expect(first.backupId).toBe(backupId);
+    connection.close();
+  });
+});
+
+function temporaryRoot(): string {
+  const root = mkdtempSync(path.join(tmpdir(), 'financehub-backup-test-'));
+  roots.push(root);
+  return root;
+}
