@@ -47,6 +47,8 @@ type ServiceFactory = (
   connection: BootstrapDatabase,
 ) => FinancialServices;
 
+type DirectoryOpener = (directory: string) => Promise<void>;
+
 export class ApplicationController {
   private connection: BootstrapDatabase | undefined;
   private writeGate: DatabaseWriteGate | undefined;
@@ -60,6 +62,8 @@ export class ApplicationController {
     private readonly createServices: ServiceFactory =
       createFinancialServices,
     private readonly applicationVersion = '0.1.0',
+    private readonly openDirectory: DirectoryOpener =
+      async () => undefined,
   ) {}
 
   registerLockedHandlers(): void {
@@ -136,6 +140,7 @@ export class ApplicationController {
         services,
         writeGate,
         backups,
+        () => this.openDirectory(backupExecutor.backupDirectory),
       );
       this.connection = connection;
       this.writeGate = writeGate;
@@ -207,6 +212,7 @@ function registerFinancialHandlers(
   services: FinancialServices,
   writeGate: DatabaseWriteGate,
   backups: BackupService,
+  openBackupDirectory: () => Promise<void>,
 ): void {
   registry.handle(IPC_CHANNELS.listFinancialItems, () =>
     services.financialItems.list(),
@@ -323,5 +329,9 @@ function registerFinancialHandlers(
     IPC_CHANNELS.setBackupRetentionCount,
     (retentionCount: unknown) =>
       backups.setRetentionCount(retentionCount),
+  );
+  registry.handle(
+    IPC_CHANNELS.openBackupDirectory,
+    openBackupDirectory,
   );
 }

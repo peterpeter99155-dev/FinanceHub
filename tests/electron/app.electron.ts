@@ -1,4 +1,9 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
@@ -240,6 +245,24 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
         exact: true,
       }),
     ).toBeVisible();
+
+    await expect(page.getByText('僅限假資料')).toHaveCount(0);
+    await expect(page.getByText('本機加密儲存')).toBeVisible();
+    await page.getByRole('button', { name: '資料與備份' }).click();
+    await expect(
+      page.getByRole('heading', { name: '資料與備份' }),
+    ).toBeVisible();
+    const backupButton = page.getByTestId('backup-now');
+    await expect(backupButton).toBeEnabled();
+    const countBefore = await backupCount(page);
+    await backupButton.click();
+    await expect.poll(() => backupCount(page)).toBe(countBefore + 1);
+    await expect(page.getByText('備份狀態正常')).toBeVisible();
+    expect(
+      readdirSync(path.join(userDataDirectory, 'backups')).filter(
+        (entry) => entry.startsWith('backup-'),
+      ).length,
+    ).toBe(countBefore + 1);
   } finally {
     await application?.close();
     rmSync(userDataDirectory, { recursive: true, force: true });
@@ -294,6 +317,14 @@ async function setupDatabase(
     .getByRole('button', { name: '建立加密資料庫' })
     .click();
   await expect(page.getByTestId('net-worth')).toBeVisible();
+}
+
+async function backupCount(page: Page): Promise<number> {
+  const text = await page
+    .locator('.backup-facts')
+    .getByText(/^\d+ 份$/)
+    .textContent();
+  return Number.parseInt(text ?? '', 10);
 }
 
 async function unlockDatabase(page: Page): Promise<void> {

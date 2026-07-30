@@ -179,6 +179,8 @@ const financeHubApi: FinanceHubApi = Object.freeze({
         IPC_CHANNELS.setBackupRetentionCount,
         retentionCount,
       ),
+    openDirectory: () =>
+      invoke<void>(IPC_CHANNELS.openBackupDirectory),
   }),
 });
 

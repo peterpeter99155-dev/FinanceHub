@@ -30,6 +30,7 @@ export const IPC_CHANNELS = {
   createBackupNow: 'backups:create-now',
   setAutomaticBackupEnabled: 'backups:set-automatic-enabled',
   setBackupRetentionCount: 'backups:set-retention-count',
+  openBackupDirectory: 'backups:open-directory',
 } as const;
 
 export interface BootstrapStatus {

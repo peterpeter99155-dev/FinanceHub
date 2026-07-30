@@ -2,6 +2,7 @@ import {
   app,
   BrowserWindow,
   ipcMain,
+  shell,
 } from 'electron';
 import path from 'node:path';
 
@@ -10,6 +11,7 @@ import {
   type IpcHandlerRegistry,
 } from './infrastructure/main/application-controller';
 import { toIpcResult } from './shared/ipc-result';
+import { ERROR_CODES, FinanceHubError } from './shared/errors';
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
@@ -62,6 +64,15 @@ void app.whenReady().then(() => {
     undefined,
     undefined,
     app.getVersion(),
+    async (directory) => {
+      const message = await shell.openPath(directory);
+      if (message) {
+        throw new FinanceHubError(
+          ERROR_CODES.backupIoFailure,
+          '無法開啟備份資料夾。',
+        );
+      }
+    },
   );
   controller.registerLockedHandlers();
   createWindow();

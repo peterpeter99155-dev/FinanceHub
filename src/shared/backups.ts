@@ -26,4 +26,5 @@ export interface BackupsApi {
   setRetentionCount(
     retentionCount: 3 | 7 | 14 | 30,
   ): Promise<BackupStatus>;
+  openDirectory(): Promise<void>;
 }

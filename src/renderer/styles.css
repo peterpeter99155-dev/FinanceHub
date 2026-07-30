@@ -17,7 +17,7 @@ html {
 
 body {
   margin: 0;
-  min-width: 760px;
+  min-width: 320px;
   min-height: 100vh;
 }
 
@@ -218,10 +218,10 @@ h2 {
 
 .environment-badge {
   padding: 9px 13px;
-  border: 1px solid #dccd9c;
+  border: 1px solid #c7d9cd;
   border-radius: 999px;
-  color: #725d21;
-  background: #fff8dd;
+  color: #315d46;
+  background: #edf6f0;
   font-size: 0.82rem;
   font-weight: 700;
 }
@@ -648,6 +648,122 @@ form label > small {
 .primary-tabs button.selected {
   color: #fff;
   background: #315d46;
+}
+
+.backup-workspace {
+  max-width: 1440px;
+  min-height: 610px;
+  margin: 0 auto;
+}
+
+.backup-heading {
+  align-items: center;
+}
+
+.backup-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 20px;
+}
+
+.backup-status-card,
+.backup-settings-card {
+  display: flex;
+  min-width: 0;
+  padding: 26px;
+  flex-direction: column;
+}
+
+.backup-status-card > strong {
+  margin-bottom: 24px;
+  color: #284936;
+  font-family: Georgia, "Noto Serif TC", serif;
+  font-size: 1.75rem;
+  font-weight: 500;
+}
+
+.backup-facts {
+  display: grid;
+  margin: 0 0 24px;
+  gap: 14px;
+}
+
+.backup-facts > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e7e3;
+}
+
+.backup-facts dt,
+.backup-location > span {
+  color: #68786f;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.backup-facts dd {
+  margin: 0;
+  color: #263a2f;
+  font-weight: 700;
+  text-align: right;
+}
+
+.backup-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.backup-toggle {
+  margin: 12px 0;
+  color: #263a2f;
+  font-weight: 750;
+}
+
+.backup-explanation {
+  margin-bottom: 24px;
+  color: #617169;
+  line-height: 1.7;
+}
+
+.backup-retention {
+  display: grid;
+  margin-bottom: 24px;
+  gap: 8px;
+  color: #405149;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.backup-location {
+  display: grid;
+  min-width: 0;
+  padding: 14px;
+  border-radius: 11px;
+  gap: 7px;
+  background: #f3f6f4;
+}
+
+.backup-location code {
+  overflow-wrap: anywhere;
+  color: #34483d;
+  font-family: Consolas, monospace;
+  font-size: 0.82rem;
+}
+
+.backup-message {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  line-height: 1.55;
+}
+
+.warning-state {
+  color: #66571f;
+  background: #fff8d9;
 }
 
 .field-heading {
@@ -1435,6 +1551,10 @@ form label > small,
   .transaction-grid {
     grid-template-columns: 1fr;
   }
+
+  .backup-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @keyframes toast-enter-dialog {
@@ -1486,5 +1606,45 @@ form label > small,
   .transaction-row .row-actions {
     grid-column: 2 / -1;
     justify-content: flex-end;
+  }
+}
+
+@media (max-width: 600px) {
+  .shell {
+    padding: 24px 16px 40px;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    margin-bottom: 24px;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  h1 {
+    font-size: 2.7rem;
+  }
+
+  .primary-tabs {
+    overflow-x: auto;
+  }
+
+  .primary-tabs button {
+    flex: 0 0 auto;
+  }
+
+  .backup-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .backup-facts > div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .backup-facts dd {
+    text-align: left;
   }
 }

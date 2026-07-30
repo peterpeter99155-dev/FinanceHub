@@ -9,8 +9,9 @@ FinanceHub 是一套以淨資產為核心、單一使用者、本機優先的個
 
 ## 目前階段
 
-專案目前正在執行 Sprint 03。財務資料庫已使用主密碼加密；
-開發、測試與提交到 Git 的內容仍只能使用假資料。
+專案目前正在執行 Sprint 04。財務資料庫已使用主密碼加密，正式版
+可在自己擁有並管理的電腦上保存真實資料；開發、測試、範例與提交到
+Git 的內容仍只能使用假資料。
 
 ## 核心方向
 
@@ -57,23 +58,51 @@ Windows 正式版的資料位於：
 %APPDATA%\FinanceHub\
 ```
 
-需要一起保存的兩個檔案是：
+FinanceHub 解鎖後會依設定自動建立本機加密備份，也可在
+「資料與備份」頁面選擇「立即備份」。預設備份位置是：
+
+```text
+%APPDATA%\FinanceHub\backups\
+```
+
+每個 `backup-<識別碼>` 目錄都是一個獨立版本，必須同時包含：
 
 ```text
 financehub.db
 financehub.db.metadata.json
+manifest.json
 ```
 
-正確備份程序：
+缺少資料庫或 metadata、使用不相符的 metadata，或忘記建立該備份
+時使用的主密碼，都無法還原。不要把缺檔、曾被修改，或未通過
+`manifest.json` 檔案大小與 SHA-256 驗證的目錄當成還原來源。
 
-1. **完全關閉 FinanceHub。** 不只是關閉視窗；請確認程式已結束。
-   這能讓仍在 WAL 中的最新資料安全寫回資料庫。
-2. 複製 `financehub.db` 與 `financehub.db.metadata.json`
-   **兩個檔案**。缺少任一個都無法還原。
-3. 可將兩個檔案一起保存到隨身碟或雲端硬碟。資料庫已加密，
-   但仍應保護備份位置與主密碼。
-4. 還原時，先完全關閉 FinanceHub，再把兩個檔案放回同一個
-   `%APPDATA%\FinanceHub\` 目錄。
+### 手動還原
+
+Sprint 04 尚未提供一鍵還原。需要手動還原時：
+
+1. **完全關閉 FinanceHub。** 請確認程式已完全結束。
+2. 選擇一個完整的 `backup-<識別碼>` 目錄。確認 manifest 所列的
+   `financehub.db` 與 `financehub.db.metadata.json` 檔名、大小及
+   SHA-256 都與實際檔案相同。Windows 可使用
+   `Get-FileHash <檔案路徑> -Algorithm SHA256` 比對雜湊。
+3. 在另一個安全目錄建立暫存資料夾，將目前資料目錄中的下列檔案
+   移入暫存資料夾；不要直接覆寫：
+
+   ```text
+   financehub.db
+   financehub.db.metadata.json
+   financehub.db-wal（若存在）
+   financehub.db-shm（若存在）
+   financehub.db-journal（若存在）
+   ```
+
+4. 將選定備份中的 `financehub.db` 與
+   `financehub.db.metadata.json` 一起複製到
+   `%APPDATA%\FinanceHub\`。不要混用不同備份版本的兩個檔案。
+5. 重新開啟 FinanceHub，使用建立該備份時的原主密碼解鎖。
+6. 確認最新財務項目、交易、統計與淨資產正確後，才算還原成功。
+   確認前請保留步驟 3 的原始檔案。
 
 舊版開發用的 `financehub.dev.db` 只有假資料，FinanceHub 不會讀取
 或轉換它。確認不再需要後，可以在程式完全關閉時手動刪除。

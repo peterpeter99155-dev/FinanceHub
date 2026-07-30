@@ -15,6 +15,7 @@ import {
   reverseBalanceEffect,
 } from '../../src/domain/transaction';
 import type { FinanceHubApi } from '../../src/shared/bootstrap';
+import type { BackupStatus } from '../../src/shared/backups';
 import type { FinancialItemDraft } from '../../src/shared/financial-items';
 import type {
   FinancialItemCustomTypeDraft,
@@ -88,6 +89,41 @@ function createApi(
     unlock(password: string): void;
   },
 ): FinanceHubApi {
+  let backupStatus: BackupStatus = {
+    automaticEnabled: true,
+    backupDirectory: 'C:\\FinanceHub-Test-Data\\backups',
+    retentionCount: 7,
+    isRunning: false,
+    validBackupCount: 0,
+  };
+  const backupScenario = new URLSearchParams(window.location.search).get(
+    'backup',
+  );
+  if (backupScenario === 'running') {
+    backupStatus = { ...backupStatus, isRunning: true };
+  }
+  if (backupScenario === 'warnings') {
+    backupStatus = {
+      ...backupStatus,
+      validBackupCount: 1,
+      lastSuccessfulAt: NOW,
+      lastError: {
+        code: 'BACKUP_IO_FAILURE',
+        message: '最近一次備份未完成。',
+        occurredAt: '2026-07-28T10:00:00.000Z',
+      },
+      cleanupWarning: {
+        code: 'BACKUP_CLEANUP_FAILURE',
+        message: '新備份已建立，但無法清理部分舊備份。',
+        occurredAt: '2026-07-28T10:00:00.000Z',
+      },
+      statusWarning: {
+        code: 'BACKUP_STATUS_UPDATE_FAILURE',
+        message: '備份檔已建立，但無法更新備份狀態紀錄。',
+        occurredAt: '2026-07-28T10:00:00.000Z',
+      },
+    };
+  }
   return {
     getBootstrapStatus: async () => ({
       appName: 'FinanceHub',
@@ -100,35 +136,24 @@ function createApi(
     }),
     unlockDatabase: async (password) => security.unlock(password),
     backups: {
-      getStatus: async () => ({
-        automaticEnabled: true,
-        backupDirectory: 'C:\\FinanceHub-Test-Data\\backups',
-        retentionCount: 7,
-        isRunning: false,
-        validBackupCount: 0,
-      }),
-      createNow: async () => ({
-        automaticEnabled: true,
-        backupDirectory: 'C:\\FinanceHub-Test-Data\\backups',
-        retentionCount: 7,
-        isRunning: false,
-        validBackupCount: 1,
-        lastSuccessfulAt: NOW,
-      }),
-      setAutomaticEnabled: async (enabled) => ({
-        automaticEnabled: enabled,
-        backupDirectory: 'C:\\FinanceHub-Test-Data\\backups',
-        retentionCount: 7,
-        isRunning: false,
-        validBackupCount: 0,
-      }),
-      setRetentionCount: async (retentionCount) => ({
-        automaticEnabled: true,
-        backupDirectory: 'C:\\FinanceHub-Test-Data\\backups',
-        retentionCount,
-        isRunning: false,
-        validBackupCount: 0,
-      }),
+      getStatus: async () => backupStatus,
+      createNow: async () => {
+        backupStatus = {
+          ...backupStatus,
+          validBackupCount: backupStatus.validBackupCount + 1,
+          lastSuccessfulAt: NOW,
+        };
+        return backupStatus;
+      },
+      setAutomaticEnabled: async (enabled) => {
+        backupStatus = { ...backupStatus, automaticEnabled: enabled };
+        return backupStatus;
+      },
+      setRetentionCount: async (retentionCount) => {
+        backupStatus = { ...backupStatus, retentionCount };
+        return backupStatus;
+      },
+      openDirectory: async () => undefined,
     },
     financialItems: {
       list: async () => financialItemSnapshot(state),

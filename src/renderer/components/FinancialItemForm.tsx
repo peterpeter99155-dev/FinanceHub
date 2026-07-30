@@ -7,7 +7,6 @@ import type {
 import { useLayoutEffect } from 'react';
 
 import {
-  DATA_STATUSES,
   type DataStatus,
   MAX_FINANCIAL_ITEM_AMOUNT_TWD,
 } from '../../domain/financial-item';
@@ -15,6 +14,7 @@ import type { FinancialItemCustomType } from '../../domain/financial-item-custom
 import type { FinancialItemDraft } from '../../shared/financial-items';
 import {
   FINANCIAL_ITEM_TYPE_OPTIONS,
+  MANUAL_DATA_STATUSES,
   STATUS_LABELS,
 } from '../labels';
 import type { ManagementSection } from './ManagementDialog';
@@ -218,7 +218,7 @@ export function FinancialItemForm({
                   }))
                 }
               >
-                {DATA_STATUSES.map((status) => (
+                {MANUAL_DATA_STATUSES.map((status) => (
                   <option key={status} value={status}>
                     {STATUS_LABELS[status]}
                   </option>
