@@ -8,6 +8,10 @@
 - 依據文件：`01_Product_Vision.md`、`02_Requirements.md`、`03_Business_Rules.md`、`04_Decision_Log.md`
 - 開發週期：一週 timebox
 
+> 歷史狀態註記（2026-07-30）：本文件記錄「移至 Sprint 03」是
+> Sprint 02 結束時的真實決議；Sprint 03 最終未實作這些項目。
+> 目前狀態以 `00_Glossary.md` 與 `12_Sprint_03_Review.md` 為準。
+
 ## Sprint Goal
 
 在 Sprint 01 的淨資產底座上，建立可實際使用的手動收支流水：
