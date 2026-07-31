@@ -25,6 +25,47 @@ describe('BackupService', () => {
     expect(executor.exportedTo).toBe('D:\\FinanceHub exports');
   });
 
+  it('requires explicit confirmation before lowering retention deletes backups', async () => {
+    const executor = new FakeExecutor();
+    executor.inventory = {
+      validBackupCount: 4,
+      oldestSuccessfulAt: '2026-07-01T00:00:00.000Z',
+      lastSuccessfulAt: '2026-07-04T00:00:00.000Z',
+    };
+    const settings = new MemorySettings();
+    settings.value = { ...settings.value, retentionCount: 30 };
+    const service = new BackupService(
+      executor, settings, fixedClock(), immediateWrites(),
+    );
+
+    await expect(service.setRetentionCount(3)).rejects.toMatchObject({
+      code: ERROR_CODES.invalidInput,
+    });
+    expect(executor.lastRetentionCount).toBeUndefined();
+    expect(settings.value.retentionCount).toBe(30);
+
+    await service.setRetentionCount(3, true);
+    expect(executor.lastRetentionCount).toBe(3);
+    expect(settings.value.retentionCount).toBe(3);
+  });
+
+  it('keeps the previous retention setting when immediate cleanup fails', async () => {
+    const executor = new FakeExecutor();
+    executor.inventory = { validBackupCount: 4 };
+    executor.pruneFailure = new Error('simulated cleanup failure');
+    const settings = new MemorySettings();
+    settings.value = { ...settings.value, retentionCount: 30 };
+    const service = new BackupService(
+      executor, settings, fixedClock(), immediateWrites(),
+    );
+
+    await expect(service.setRetentionCount(3, true)).rejects.toThrow(
+      'simulated cleanup failure',
+    );
+    expect(settings.value.retentionCount).toBe(30);
+  });
+
+
   it('rebuilds successful time and count from inventory, not settings', async () => {
     const settings = new MemorySettings();
     const executor = new FakeExecutor();

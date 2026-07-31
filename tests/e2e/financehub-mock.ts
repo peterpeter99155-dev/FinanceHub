@@ -111,6 +111,15 @@ function createApi(
       lastSuccessfulAt: NOW,
     };
   }
+  if (backupScenario === 'retention-reduction') {
+    backupStatus = {
+      ...backupStatus,
+      retentionCount: 30,
+      validBackupCount: 4,
+      oldestSuccessfulAt: '2026-07-21T09:00:00.000Z',
+      lastSuccessfulAt: NOW,
+    };
+  }
   if (backupScenario === 'warnings') {
     backupStatus = {
       ...backupStatus,
@@ -181,8 +190,15 @@ function createApi(
         backupStatus = { ...backupStatus, automaticEnabled: enabled };
         return backupStatus;
       },
-      setRetentionCount: async (retentionCount) => {
-        backupStatus = { ...backupStatus, retentionCount };
+      setRetentionCount: async (retentionCount, confirmRemoval = false) => {
+        backupStatus = {
+          ...backupStatus,
+          retentionCount,
+          validBackupCount:
+            confirmRemoval && backupStatus.validBackupCount > retentionCount
+              ? retentionCount
+              : backupStatus.validBackupCount,
+        };
         return backupStatus;
       },
       openDirectory: async () => undefined,

@@ -340,8 +340,8 @@ function registerFinancialHandlers(
   );
   registry.handle(
     IPC_CHANNELS.setBackupRetentionCount,
-    (retentionCount: unknown) =>
-      backups.setRetentionCount(retentionCount),
+    (retentionCount: unknown, confirmRemoval: unknown) =>
+      backups.setRetentionCount(retentionCount, confirmRemoval),
   );
   registry.handle(
     IPC_CHANNELS.openBackupDirectory,

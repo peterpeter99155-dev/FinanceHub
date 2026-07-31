@@ -3,9 +3,11 @@ import type { BackupStatus } from '../../shared/backups';
 import { backupErrorMessage } from '../messages';
 import { BackupStatusFeedback, type BackupFeedback } from './BackupStatusFeedback';
 import { BackupSettingsHeading } from './BackupSettingsHeading';
+import { BackupSettingsCard } from './BackupSettingsCard';
 import { BackupHelpDialog } from './BackupHelpDialog';
 import { BackupReplacementDialog } from './BackupReplacementDialog';
 import { BackupStatusCard } from './BackupStatusCard';
+import { RetentionReductionDialog } from './RetentionReductionDialog';
 
 type BackupAction = 'backup' | 'refresh' | 'automatic' | 'retention' |
   'folder' | 'export';
@@ -17,6 +19,8 @@ export function BackupSettingsView() {
   const [feedback, setFeedback] = useState<BackupFeedback | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [replacementOpen, setReplacementOpen] = useState(false);
+  const [pendingRetention, setPendingRetention] =
+    useState<3 | 7 | 14 | 30 | null>(null);
 
   useEffect(() => {
     if (feedback?.tone !== 'success') return;
@@ -147,6 +151,16 @@ export function BackupSettingsView() {
     }
   }
 
+  function changeRetention(value: 3 | 7 | 14 | 30) {
+    if (value < status!.validBackupCount) {
+      setPendingRetention(value);
+      return;
+    }
+    void run('retention', () =>
+      window.financeHub.backups.setRetentionCount(value),
+    );
+  }
+
   if (loading) {
     return (
       <section className="panel backup-panel state-panel" aria-live="polite">
@@ -204,55 +218,16 @@ export function BackupSettingsView() {
           }
         />
 
-        <article className="panel backup-settings-card">
-          <p className="label">自動備份</p>
-          <label className="checkbox-label backup-toggle">
-            <input
-              checked={status.automaticEnabled}
-              disabled={Boolean(action)}
-              type="checkbox"
-              onChange={(event) =>
-                void run('automatic', () =>
-                  window.financeHub.backups.setAutomaticEnabled(
-                    event.target.checked,
-                  ),
-                )
-              }
-            />
-            啟用自動備份
-          </label>
-          <p className="backup-explanation">
-            成功解鎖後會檢查一次；距離上次成功備份滿 24 小時才會建立
-            新備份。達到保留份數後，會先確認新備份完整可用，再移除
-            最舊的一份。關閉後仍可使用「立即備份」。
-          </p>
-          <label className="backup-retention">
-            保留最近幾份成功備份
-            <select
-              disabled={Boolean(action)}
-              value={status.retentionCount}
-              onChange={(event) =>
-                void run('retention', () =>
-                  window.financeHub.backups.setRetentionCount(
-                    Number(event.target.value) as 3 | 7 | 14 | 30,
-                  ),
-                )
-              }
-            >
-              {[3, 7, 14, 30].map((count) => (
-                <option key={count} value={count}>{count} 份</option>
-              ))}
-            </select>
-          </label>
-          <div className="backup-location">
-            <span>資料位置</span>
-            <code>{status.dataDirectory}</code>
-          </div>
-          <div className="backup-location">
-            <span>備份位置</span>
-            <code>{status.backupDirectory}</code>
-          </div>
-        </article>
+        <BackupSettingsCard
+          actionPending={Boolean(action)}
+          status={status}
+          onAutomaticChange={(enabled) =>
+            void run('automatic', () =>
+              window.financeHub.backups.setAutomaticEnabled(enabled),
+            )
+          }
+          onRetentionChange={changeRetention}
+        />
       </div>
 
       {status.lastError && (
@@ -284,6 +259,23 @@ export function BackupSettingsView() {
           onConfirm={() => {
             setReplacementOpen(false);
             void createBackup(true);
+          }}
+        />
+      )}
+      {pendingRetention !== null && (
+        <RetentionReductionDialog
+          oldestSuccessfulAt={status.oldestSuccessfulAt}
+          removalCount={status.validBackupCount - pendingRetention}
+          retentionCount={pendingRetention}
+          onCancel={() => setPendingRetention(null)}
+          onConfirm={() => {
+            const value = pendingRetention;
+            setPendingRetention(null);
+            void run(
+              'retention',
+              () => window.financeHub.backups.setRetentionCount(value, true),
+              `已保留最近 ${value} 份備份`,
+            );
           }}
         />
       )}

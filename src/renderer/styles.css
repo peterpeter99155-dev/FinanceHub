@@ -712,6 +712,11 @@ form label > small {
   line-height: 1.65;
 }
 
+.backup-help-dialog > .primary-button {
+  display: block;
+  margin-inline: auto;
+}
+
 .backup-feedback-slot {
   display: flex;
   min-height: 58px;

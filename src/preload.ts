@@ -176,10 +176,14 @@ const financeHubApi: FinanceHubApi = Object.freeze({
         IPC_CHANNELS.setAutomaticBackupEnabled,
         enabled,
       ),
-    setRetentionCount: (retentionCount: 3 | 7 | 14 | 30) =>
+    setRetentionCount: (
+      retentionCount: 3 | 7 | 14 | 30,
+      confirmRemoval = false,
+    ) =>
       invoke<BackupStatus>(
         IPC_CHANNELS.setBackupRetentionCount,
         retentionCount,
+        confirmRemoval,
       ),
     openDirectory: () =>
       invoke<void>(IPC_CHANNELS.openBackupDirectory),

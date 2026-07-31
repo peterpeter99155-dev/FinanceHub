@@ -91,6 +91,30 @@ test('confirms a manual backup before replacing the oldest backup', async ({
   await expect(page.getByText('7 / 7 份')).toBeVisible();
 });
 
+test('confirms and immediately applies a lower retention count', async ({
+  page,
+}) => {
+  await page.goto('/?backup=retention-reduction');
+  await page.getByRole('button', { name: '資料與備份' }).click();
+  const retention = page.getByLabel('保留最近幾份成功備份');
+  await expect(page.getByText('4 / 30 份')).toBeVisible();
+
+  await retention.selectOption('3');
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('將保留份數改為 3 份');
+  await expect(dialog).toContainText('將移除最舊的 1 份備份');
+  await page.getByRole('button', { name: '取消' }).click();
+  await expect(retention).toHaveValue('30');
+
+  await retention.selectOption('3');
+  await page
+    .getByRole('button', { name: '套用並移除舊備份' })
+    .click();
+  await expect(retention).toHaveValue('3');
+  await expect(page.getByText('3 / 3 份')).toBeVisible();
+  await expect(page.getByText('已保留最近 3 份備份')).toBeVisible();
+});
+
 test('manual status choices exclude system-only states', async ({ page }) => {
   await page.getByRole('button', { name: '資產與負債' }).click();
   await page.getByTestId('advanced-settings').click();

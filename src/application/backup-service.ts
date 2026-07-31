@@ -96,9 +96,17 @@ export class BackupService {
     return this.getStatus();
   }
 
-  async setRetentionCount(value: unknown): Promise<BackupStatus> {
+  async setRetentionCount(
+    value: unknown,
+    confirmRemoval: unknown = false,
+  ): Promise<BackupStatus> {
     if (value !== 3 && value !== 7 && value !== 14 && value !== 30) {
       throw invalidBackupSetting();
+    }
+    const inventory = await this.executor.inspectInventory();
+    if (inventory.validBackupCount > value) {
+      if (confirmRemoval !== true) throw invalidBackupSetting();
+      await this.executor.pruneBackups(value);
     }
     await this.writes.runWrite(() => this.settings.setRetentionCount(value));
     return this.getStatus();

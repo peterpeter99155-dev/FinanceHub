@@ -28,6 +28,7 @@ export interface BackupsApi {
   setAutomaticEnabled(enabled: boolean): Promise<BackupStatus>;
   setRetentionCount(
     retentionCount: 3 | 7 | 14 | 30,
+    confirmRemoval?: boolean,
   ): Promise<BackupStatus>;
   openDirectory(): Promise<void>;
   exportLatest(): Promise<'exported' | 'cancelled'>;
