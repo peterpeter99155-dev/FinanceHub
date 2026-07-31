@@ -327,7 +327,7 @@ async function setupDatabase(
 async function backupCount(page: Page): Promise<number> {
   const text = await page
     .locator('.backup-facts')
-    .getByText(/^\d+ 份$/)
+    .getByText(/^\d+ \/ \d+ 份$/)
     .textContent();
   return Number.parseInt(text ?? '', 10);
 }

@@ -24,7 +24,7 @@ test('shows backup state and updates manual backup settings', async ({
   await expect(successFeedback).toBeVisible();
   await expect(successFeedback).toHaveClass(/success/);
   await expect(page.getByText('備份狀態正常')).toBeVisible();
-  await expect(page.getByText('1 份')).toBeVisible();
+  await expect(page.getByText('1 / 7 份')).toBeVisible();
 
   await page.getByLabel('啟用自動備份').uncheck();
   await expect(page.getByLabel('啟用自動備份')).not.toBeChecked();
@@ -68,6 +68,27 @@ test('shows failed backup feedback below the page heading', async ({
     feedback.boundingBox(),
   ]);
   expect(feedbackBox!.y).toBeGreaterThan(headingBox!.y);
+});
+
+test('confirms a manual backup before replacing the oldest backup', async ({
+  page,
+}) => {
+  await page.goto('/?backup=capacity');
+  await page.getByRole('button', { name: '資料與備份' }).click();
+  await expect(page.getByText('7 / 7 份')).toBeVisible();
+
+  await page.getByTestId('backup-now').click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText(
+    '建立新備份後，將移除最舊的 1 份備份',
+  );
+  await expect(dialog).toContainText('2026年7月21日');
+  await page.getByRole('button', { name: '繼續備份' }).click();
+
+  await expect(
+    page.getByText('備份已完成，並已移除最舊的 1 份備份'),
+  ).toBeVisible();
+  await expect(page.getByText('7 / 7 份')).toBeVisible();
 });
 
 test('manual status choices exclude system-only states', async ({ page }) => {

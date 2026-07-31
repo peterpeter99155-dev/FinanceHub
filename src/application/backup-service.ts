@@ -39,6 +39,7 @@ export class BackupService {
       retentionCount: settings.retentionCount,
       isRunning: this.running,
       validBackupCount: inventory.validBackupCount,
+      oldestSuccessfulAt: inventory.oldestSuccessfulAt,
       lastSuccessfulAt: inventory.lastSuccessfulAt,
       nextAutomaticBackupAt: nextBackupAt(
         inventory.lastSuccessfulAt,

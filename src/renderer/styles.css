@@ -690,6 +690,19 @@ form label > small {
   box-shadow: 0 28px 90px rgb(16 28 21 / 32%);
 }
 
+.backup-replacement-dialog {
+  width: min(560px, calc(100vw - 32px));
+  padding: 28px;
+  border-color: #cfd8d2;
+  background: #fff;
+  box-shadow: 0 28px 90px rgb(16 28 21 / 32%);
+}
+
+.backup-replacement-dialog > p:not(.label) {
+  color: #50645a;
+  line-height: 1.7;
+}
+
 .backup-help-list {
   display: grid;
   margin: 24px 0;
@@ -752,6 +765,16 @@ form label > small {
   background: #c44741;
 }
 
+.backup-feedback.warning {
+  border-color: #dfca7d;
+  color: #745d13;
+  background: #fff8d9;
+}
+
+.backup-feedback.warning > span {
+  background: #ad8420;
+}
+
 .backup-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
@@ -807,6 +830,14 @@ form label > small {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.backup-actions button {
+  min-width: 128px;
+}
+
+.backup-heading-actions button {
+  min-width: 154px;
 }
 
 .backup-toggle {

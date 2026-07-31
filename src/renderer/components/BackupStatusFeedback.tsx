@@ -1,5 +1,5 @@
 export interface BackupFeedback {
-  readonly tone: 'success' | 'error';
+  readonly tone: 'success' | 'warning' | 'error';
   readonly message: string;
 }
 
@@ -16,7 +16,11 @@ export function BackupStatusFeedback({
       role={feedback.tone === 'error' ? 'alert' : 'status'}
     >
       <span aria-hidden="true">
-        {feedback.tone === 'success' ? '✓' : '×'}
+        {feedback.tone === 'success'
+          ? '✓'
+          : feedback.tone === 'warning'
+            ? '!'
+            : '×'}
       </span>
       {feedback.message}
     </div>

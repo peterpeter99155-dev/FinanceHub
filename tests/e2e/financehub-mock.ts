@@ -103,6 +103,14 @@ function createApi(
   if (backupScenario === 'running') {
     backupStatus = { ...backupStatus, isRunning: true };
   }
+  if (backupScenario === 'capacity') {
+    backupStatus = {
+      ...backupStatus,
+      validBackupCount: 7,
+      oldestSuccessfulAt: '2026-07-21T09:00:00.000Z',
+      lastSuccessfulAt: NOW,
+    };
+  }
   if (backupScenario === 'warnings') {
     backupStatus = {
       ...backupStatus,
@@ -162,7 +170,9 @@ function createApi(
         }
         backupStatus = {
           ...backupStatus,
-          validBackupCount: backupStatus.validBackupCount + 1,
+          validBackupCount: backupScenario === 'capacity'
+            ? backupStatus.validBackupCount
+            : backupStatus.validBackupCount + 1,
           lastSuccessfulAt: NOW,
         };
         return backupStatus;

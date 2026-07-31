@@ -13,6 +13,7 @@ export interface BackupStatus {
   readonly retentionCount: 3 | 7 | 14 | 30;
   readonly isRunning: boolean;
   readonly validBackupCount: number;
+  readonly oldestSuccessfulAt?: string;
   readonly lastSuccessfulAt?: string;
   readonly nextAutomaticBackupAt?: string;
   readonly lastError?: BackupIssue;

@@ -85,6 +85,7 @@ export class EncryptedBackupService implements BackupExecutor {
     const backups = await this.validBackups();
     return {
       validBackupCount: backups.length,
+      oldestSuccessfulAt: backups.at(0)?.manifest.completedAt,
       lastSuccessfulAt: backups.at(-1)?.manifest.completedAt,
     };
   }

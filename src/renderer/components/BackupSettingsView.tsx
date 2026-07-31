@@ -1,25 +1,14 @@
 import { useEffect, useState } from 'react';
-
 import type { BackupStatus } from '../../shared/backups';
 import { backupErrorMessage } from '../messages';
-import {
-  backupHeadline,
-  formatBackupTime,
-} from '../backupViewModel';
-import {
-  BackupStatusFeedback,
-  type BackupFeedback,
-} from './BackupStatusFeedback';
+import { BackupStatusFeedback, type BackupFeedback } from './BackupStatusFeedback';
 import { BackupSettingsHeading } from './BackupSettingsHeading';
 import { BackupHelpDialog } from './BackupHelpDialog';
+import { BackupReplacementDialog } from './BackupReplacementDialog';
+import { BackupStatusCard } from './BackupStatusCard';
 
-type BackupAction =
-  | 'backup'
-  | 'refresh'
-  | 'automatic'
-  | 'retention'
-  | 'folder'
-  | 'export';
+type BackupAction = 'backup' | 'refresh' | 'automatic' | 'retention' |
+  'folder' | 'export';
 
 export function BackupSettingsView() {
   const [status, setStatus] = useState<BackupStatus | null>(null);
@@ -27,6 +16,7 @@ export function BackupSettingsView() {
   const [action, setAction] = useState<BackupAction | null>(null);
   const [feedback, setFeedback] = useState<BackupFeedback | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [replacementOpen, setReplacementOpen] = useState(false);
 
   useEffect(() => {
     if (feedback?.tone !== 'success') return;
@@ -123,6 +113,40 @@ export function BackupSettingsView() {
     }
   }
 
+  async function createBackup(replacesOldest: boolean) {
+    if (action) return;
+    setAction('backup');
+    setFeedback(null);
+    try {
+      const result = await window.financeHub.backups.createNow();
+      setStatus(result);
+      if (replacesOldest && result.cleanupWarning) {
+        setFeedback({
+          tone: 'warning',
+          message: '新備份已完成，但無法移除最舊的備份',
+        });
+      } else {
+        const removedCount = Math.max(
+          1,
+          (status?.validBackupCount ?? 0) + 1 - result.validBackupCount,
+        );
+        setFeedback({
+          tone: 'success',
+          message: replacesOldest
+            ? `備份已完成，並已移除最舊的 ${removedCount} 份備份`
+            : '備份已完成',
+        });
+      }
+    } catch (caught) {
+      setFeedback({
+        tone: 'error',
+        message: backupErrorMessage(caught),
+      });
+    } finally {
+      setAction(null);
+    }
+  }
+
   if (loading) {
     return (
       <section className="panel backup-panel state-panel" aria-live="polite">
@@ -160,55 +184,25 @@ export function BackupSettingsView() {
       </div>
 
       <div className="backup-grid">
-        <article className="panel backup-status-card">
-          <p className="label">備份狀態</p>
-          <strong>{backingUp ? '備份進行中…' : backupHeadline(status)}</strong>
-          <dl className="backup-facts">
-            <div>
-              <dt>最後成功備份</dt>
-              <dd>{formatBackupTime(status.lastSuccessfulAt)}</dd>
-            </div>
-            <div>
-              <dt>現存有效備份</dt>
-              <dd>{status.validBackupCount} 份</dd>
-            </div>
-            <div>
-              <dt>下次可自動備份</dt>
-              <dd>{formatBackupTime(status.nextAutomaticBackupAt)}</dd>
-            </div>
-          </dl>
-          <div className="backup-actions">
-            <button
-              className="primary-button"
-              data-testid="backup-now"
-              disabled={Boolean(action) || backingUp}
-              type="button"
-              onClick={() =>
-                void run(
-                  'backup',
-                  () => window.financeHub.backups.createNow(),
-                  '備份已完成',
-                )
-              }
-            >
-              {backingUp ? '正在備份…' : '立即備份'}
-            </button>
-            <button
-              className="secondary-button"
-              disabled={Boolean(action)}
-              type="button"
-              onClick={() =>
-                void run(
-                  'refresh',
-                  () => window.financeHub.backups.getStatus(),
-                  '備份狀態已更新',
-                )
-              }
-            >
-              重新整理狀態
-            </button>
-          </div>
-        </article>
+        <BackupStatusCard
+          actionPending={Boolean(action)}
+          backingUp={backingUp}
+          status={status}
+          onBackup={() => {
+            if (status.validBackupCount >= status.retentionCount) {
+              setReplacementOpen(true);
+            } else {
+              void createBackup(false);
+            }
+          }}
+          onRefresh={() =>
+            void run(
+              'refresh',
+              () => window.financeHub.backups.getStatus(),
+              '備份狀態已更新',
+            )
+          }
+        />
 
         <article className="panel backup-settings-card">
           <p className="label">自動備份</p>
@@ -229,7 +223,8 @@ export function BackupSettingsView() {
           </label>
           <p className="backup-explanation">
             成功解鎖後會檢查一次；距離上次成功備份滿 24 小時才會建立
-            新備份。關閉後仍可使用「立即備份」。
+            新備份。達到保留份數後，會先確認新備份完整可用，再移除
+            最舊的一份。關閉後仍可使用「立即備份」。
           </p>
           <label className="backup-retention">
             保留最近幾份成功備份
@@ -277,6 +272,20 @@ export function BackupSettingsView() {
       )}
       {helpOpen && (
         <BackupHelpDialog onClose={() => setHelpOpen(false)} />
+      )}
+      {replacementOpen && (
+        <BackupReplacementDialog
+          oldestSuccessfulAt={status.oldestSuccessfulAt}
+          removalCount={Math.max(
+            1,
+            status.validBackupCount - status.retentionCount + 1,
+          )}
+          onCancel={() => setReplacementOpen(false)}
+          onConfirm={() => {
+            setReplacementOpen(false);
+            void createBackup(true);
+          }}
+        />
       )}
     </section>
   );

@@ -6,6 +6,7 @@ export interface BackupExecution {
 
 export interface BackupInventory {
   readonly validBackupCount: number;
+  readonly oldestSuccessfulAt?: string;
   readonly lastSuccessfulAt?: string;
 }
 

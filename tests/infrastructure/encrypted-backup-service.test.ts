@@ -344,6 +344,7 @@ describe('EncryptedBackupService', () => {
     writeFileSync(path.join(invalid, 'manifest.json'), '{}');
     await expect(service.inspectInventory()).resolves.toEqual({
       validBackupCount: 1,
+      oldestSuccessfulAt: '2026-07-30T04:00:00.000Z',
       lastSuccessfulAt: '2026-07-30T04:00:00.000Z',
     });
     connection.database.exec(
@@ -351,6 +352,7 @@ describe('EncryptedBackupService', () => {
     );
     await expect(service.inspectInventory()).resolves.toEqual({
       validBackupCount: 1,
+      oldestSuccessfulAt: '2026-07-30T04:00:00.000Z',
       lastSuccessfulAt: '2026-07-30T04:00:00.000Z',
     });
     connection.close();
