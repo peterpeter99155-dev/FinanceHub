@@ -2,7 +2,8 @@
 
 ## 1. 結論
 
-Sprint 04 已完成計畫 S4-00～S4-52。FinanceHub 現在會建立可驗證、
+Sprint 04 的功能實作、合併前安全修正及最終 HEAD 完整驗收均已
+完成，目前等待合併審查。FinanceHub 現在會建立可驗證、
 版本化的本機加密備份，支援解鎖後的 24 小時自動檢查、手動立即備份、
 最近 N 份保留，以及常駐的「資料與備份」介面。
 
@@ -46,10 +47,12 @@ Sprint 04 已完成計畫 S4-00～S4-52。FinanceHub 現在會建立可驗證、
 ### 保留清理
 
 - 可保留最近 3、7、14、30 份，預設 7。
-- 只有新備份成功發布後才清理。
+- 自動循環清理只有在新備份成功發布後執行；使用者確認降低保留
+  份數時，依第 13、14 節的安全順序立即嘗試清理。
 - 候選必須再次通過格式、大小及雜湊驗證。
-- 刪除前再次限制為備份根目錄的直接子目錄，拒絕 symlink、
-  junction、reparse point、巢狀目錄及未知內容。
+- 刪除前再次限制為備份根目錄的直接子目錄；自動測試已實證拒絕
+  symlink、junction、巢狀目錄及未知內容。其他 Windows reparse
+  point 尚無逐類型 fixture，不宣稱已全部實測。
 - 候選先原子移入 `.deleting-<UUID>`，再逐一刪除三個預期一般檔案
   與空目錄；production 沒有使用遞迴刪除。
 - rename 後再次比對完整 manifest 身分及兩個檔案紀錄。若目錄在
@@ -125,6 +128,7 @@ Sprint 04 已完成計畫 S4-00～S4-52。FinanceHub 現在會建立可驗證、
 - `backups:set-automatic-enabled`
 - `backups:set-retention-count`
 - `backups:open-directory`
+- `backups:export-latest`
 
 所有 filesystem 原始錯誤、完整錯誤路徑與 native message 都不跨 IPC。
 
@@ -155,8 +159,8 @@ Sprint 04 已完成計畫 S4-00～S4-52。FinanceHub 現在會建立可驗證、
 typecheck: passed
 lint: passed
 verify: passed
-unit/integration: 26 files, 157 tests passed
-browser e2e: 11 passed
+unit/integration: 26 files, 169 tests passed
+browser e2e: 14 passed
 package smoke: passed
 production test-password matches: 0
 production known test-derived-key matches: 0
@@ -293,8 +297,70 @@ Roaming 資料。
 - 一鍵還原仍未實作，明確列入後續 Sprint。
 - 降低保留份數且新值低於現有有效備份數時，改為當下顯示實際
   移除份數與最舊備份時間；確認後立即安全清理，取消或清理失敗時
-  維持原設定。避免把設定造成的多份刪除延後混入下一次手動備份。
+  不會把清理結果假裝成未發生。合併前安全修正後採「先持久化新
+  設定，再清理」；設定失敗不刪檔，清理失敗則保留新設定、多出的
+  備份及可見警告，供後續安全重試。
 - 後續介面優化將評估固定保留最近 7 份並隱藏一般份數選單；目前
   僅記錄待排，不修改既有功能。
 - 操作提示的正式規範已集中於 `00_UI_Feedback_Rules.md`；備份頁
   作為第一個正式實作，其他既有提示在後續修改到該流程時遷移。
+
+## 14. 合併前誠實審查修正與最終驗收
+
+2026-07-31 的唯讀誠實審查發現兩項資料安全問題及數個測試缺口。
+本輪只修正合併阻擋項目，未開始容量盤點或 Sprint 05。
+
+### 安全修正
+
+- `.deleting-*` 續作不再只依目錄名稱及檔案數量刪除。非空
+  quarantine 必須保留 manifest，且目錄 UUID、manifest
+  `backupId` 與仍存在檔案的大小／SHA-256 全部一致，才能續作。
+  DB 與 sidecar 先刪，manifest 最後刪；空目錄才可直接移除。
+- rename 後發現身分替換而保留的 quarantine，再次執行未完成項目
+  清理時仍完整保留，不會延後誤刪。
+- 降低保留份數改為先持久化新設定，再清理舊備份。設定寫入失敗時
+  不刪除任何備份；設定成功但清理失敗時保留新設定、多出的備份及
+  可見清理警告。
+- 同次啟動已自動嘗試過後，使用者關閉再重新開啟自動備份，會重設
+  本次啟動的嘗試旗標並立即重新檢查 24 小時間隔。
+- `recordFailure()` 自身失敗不再覆蓋原始備份錯誤，另以狀態更新
+  警告表示紀錄失敗。
+
+### 新增失敗防線
+
+- checkpoint pragma 直接拋錯後，寫入閘門仍正常釋放。
+- 以可控注入實測 `ENOSPC` 與 `EACCES`：來源 DB／metadata 位元組
+  不變、沒有成功備份目錄，跨 IPC 結果固定為
+  `BACKUP_IO_FAILURE` 且不含原始路徑。
+- 真 Electron 測試經 preload／IPC／main 驗證備份完成等待與
+  `BACKUP_IO_FAILURE`。
+- 最新安裝版在備份目錄加入缺少 manifest 的三件式候選後，正式
+  production validator 不將其計入有效備份。
+
+### 最終 HEAD 驗收
+
+```text
+typecheck: passed
+lint: passed
+verify: passed
+unit/integration: 26 files, 169 tests passed
+browser e2e: 14 passed
+Electron same package: 10/10 passed
+package smoke: passed
+production test-password matches: 0
+production known test-derived-key matches: 0
+make: passed
+clean install: uninstall exit 0, install exit 0
+installed Sprint 04 acceptance: passed
+```
+
+安裝端驗收實際涵蓋：首次自動備份、手動備份、三件式格式與明文
+掃描、未滿／超過 24 小時、自動保留最近 7 份、README 隔離還原、
+財務項目／交易／淨資產，以及缺 DB、sidecar 與 manifest 的拒絕。
+
+### 剩餘限制
+
+- 自動測試已實證 symlink 與 junction；其他 Windows reparse point
+  尚無逐類型 fixture，因此不宣稱所有 reparse 類型都已實測。
+- manifest 沒有簽章及可信時間，仍只提供一致性與損壞偵測。
+- Sprint 04 仍不提供還原 UI；還原依 README 手動程序。

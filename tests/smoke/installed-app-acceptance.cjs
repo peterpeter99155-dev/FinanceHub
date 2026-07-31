@@ -1,6 +1,7 @@
 const {
   copyFileSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -100,6 +101,11 @@ async function main() {
     await closeInstalledApp(application);
     application = undefined;
     const latestBackup = latestBackupDirectory(backupsDirectory);
+    await verifyMissingManifestRejected(
+      userDataDirectory,
+      latestBackup,
+      7,
+    );
     await verifyRestore(latestBackup);
     await verifyLiveFileRejection(latestBackup, 'database');
     await verifyLiveFileRejection(latestBackup, 'metadata');
@@ -120,6 +126,7 @@ async function main() {
         'Restored item, transaction and net worth: passed',
         'Missing live database rejected: passed',
         'Missing live metadata rejected: passed',
+        'Missing manifest backup rejected by packaged validator: passed',
         '',
       ].join('\n'),
     );
@@ -244,6 +251,40 @@ async function verifyRestore(backupDirectory) {
     await restored.page.getByText(`備註：${TEST_TRANSACTION_NOTE}`).waitFor();
   } finally {
     await closeInstalledApp(restored);
+  }
+}
+
+async function verifyMissingManifestRejected(
+  userDataDirectory,
+  backupDirectory,
+  expectedValidCount,
+) {
+  const invalidDirectory = path.join(
+    userDataDirectory,
+    'backups',
+    'FinanceHub-backup-2026-07-31_23-59-59-' +
+      '99999999-9999-4999-8999-999999999999',
+  );
+  mkdirSync(invalidDirectory);
+  copyFileSync(
+    path.join(backupDirectory, 'financehub.db'),
+    path.join(invalidDirectory, 'financehub.db'),
+  );
+  copyFileSync(
+    path.join(backupDirectory, 'financehub.db.metadata.json'),
+    path.join(invalidDirectory, 'financehub.db.metadata.json'),
+  );
+
+  const application = await launchInstalledApp(userDataDirectory);
+  try {
+    await unlockDatabase(application.page);
+    const status = await settledBackupStatus(application.page);
+    assert(
+      status.validBackupCount === expectedValidCount,
+      'Packaged validator counted a backup without manifest.',
+    );
+  } finally {
+    await closeInstalledApp(application);
   }
 }
 

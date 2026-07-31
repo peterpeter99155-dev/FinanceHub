@@ -89,10 +89,14 @@ export class BackupService {
 
   async setAutomaticEnabled(enabled: unknown): Promise<BackupStatus> {
     if (typeof enabled !== 'boolean') throw invalidBackupSetting();
+    const wasEnabled = this.settings.get().automaticEnabled;
     await this.writes.runWrite(() =>
       this.settings.setAutomaticEnabled(enabled),
     );
-    if (enabled) await this.attemptAutomaticAfterUnlock();
+    if (enabled && !wasEnabled) {
+      this.automaticAttempted = false;
+      await this.attemptAutomaticAfterUnlock();
+    }
     return this.getStatus();
   }
 
@@ -104,11 +108,27 @@ export class BackupService {
       throw invalidBackupSetting();
     }
     const inventory = await this.executor.inspectInventory();
-    if (inventory.validBackupCount > value) {
-      if (confirmRemoval !== true) throw invalidBackupSetting();
-      await this.executor.pruneBackups(value);
+    if (inventory.validBackupCount > value && confirmRemoval !== true) {
+      throw invalidBackupSetting();
     }
     await this.writes.runWrite(() => this.settings.setRetentionCount(value));
+    if (inventory.validBackupCount > value) {
+      try {
+        await this.executor.pruneBackups(value);
+        await this.writes.runWrite(() =>
+          this.settings.clearCleanupWarning(),
+        );
+      } catch {
+        const warning = retentionCleanupFailureWarning(this.clock.now());
+        try {
+          await this.writes.runWrite(() =>
+            this.settings.recordCleanupWarning(warning),
+          );
+        } catch {
+          this.statusWarning = statusUpdateWarning(this.clock.now());
+        }
+      }
+    }
     return this.getStatus();
   }
 
@@ -148,6 +168,8 @@ export class BackupService {
             occurredAt: this.clock.now(),
           }),
         );
+      } catch {
+        this.statusWarning = statusUpdateWarning(this.clock.now());
       } finally {
         this.finishRunningBackup();
       }
@@ -159,11 +181,7 @@ export class BackupService {
     try {
       await this.executor.pruneBackups(retentionCount);
     } catch {
-      cleanupWarning = {
-        code: ERROR_CODES.backupCleanupFailure,
-        message: '新備份已建立，但無法清理部分舊備份。',
-        occurredAt: this.clock.now(),
-      } as const;
+      cleanupWarning = cleanupFailureWarning(this.clock.now());
     }
     try {
       if (cleanupWarning) {
@@ -247,6 +265,26 @@ function statusUpdateWarning(
   return {
     code: ERROR_CODES.backupStatusUpdateFailure,
     message: '備份檔已建立，但無法更新備份狀態紀錄。',
+    occurredAt,
+  };
+}
+
+function cleanupFailureWarning(
+  occurredAt: string,
+): NonNullable<BackupStatus['cleanupWarning']> {
+  return {
+    code: ERROR_CODES.backupCleanupFailure,
+    message: '新備份已建立，但無法清理部分舊備份。',
+    occurredAt,
+  };
+}
+
+function retentionCleanupFailureWarning(
+  occurredAt: string,
+): NonNullable<BackupStatus['cleanupWarning']> {
+  return {
+    code: ERROR_CODES.backupCleanupFailure,
+    message: '保留份數已更新，但部分舊備份尚未清理。',
     occurredAt,
   };
 }

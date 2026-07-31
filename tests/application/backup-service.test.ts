@@ -49,7 +49,7 @@ describe('BackupService', () => {
     expect(settings.value.retentionCount).toBe(3);
   });
 
-  it('keeps the previous retention setting when immediate cleanup fails', async () => {
+  it('keeps the new retention setting and records a warning when cleanup fails', async () => {
     const executor = new FakeExecutor();
     executor.inventory = { validBackupCount: 4 };
     executor.pruneFailure = new Error('simulated cleanup failure');
@@ -59,9 +59,33 @@ describe('BackupService', () => {
       executor, settings, fixedClock(), immediateWrites(),
     );
 
-    await expect(service.setRetentionCount(3, true)).rejects.toThrow(
-      'simulated cleanup failure',
+    await expect(service.setRetentionCount(3, true)).resolves.toMatchObject({
+      retentionCount: 3,
+      validBackupCount: 4,
+      cleanupWarning: {
+        code: ERROR_CODES.backupCleanupFailure,
+      },
+    });
+    expect(settings.value.retentionCount).toBe(3);
+    expect(settings.value.cleanupWarning?.code).toBe(
+      ERROR_CODES.backupCleanupFailure,
     );
+  });
+
+  it('does not prune any backup when persisting lower retention fails', async () => {
+    const executor = new FakeExecutor();
+    executor.inventory = { validBackupCount: 4 };
+    const settings = new MemorySettings();
+    settings.value = { ...settings.value, retentionCount: 30 };
+    settings.failSetRetentionCount = true;
+    const service = new BackupService(
+      executor, settings, fixedClock(), immediateWrites(),
+    );
+
+    await expect(service.setRetentionCount(3, true)).rejects.toThrow(
+      'simulated retention settings failure',
+    );
+    expect(executor.lastRetentionCount).toBeUndefined();
     expect(settings.value.retentionCount).toBe(30);
   });
 
@@ -252,6 +276,44 @@ describe('BackupService', () => {
     expect(executor.createCount).toBe(1);
   });
 
+  it('checks again when automatic backup is disabled and re-enabled after an attempt', async () => {
+    const settings = new MemorySettings();
+    const executor = new FakeExecutor();
+    const service = new BackupService(
+      executor, settings, fixedClock(), immediateWrites(),
+    );
+
+    await service.attemptAutomaticAfterUnlock();
+    expect(executor.createCount).toBe(1);
+    await service.setAutomaticEnabled(false);
+    executor.inventory = { validBackupCount: 0 };
+    await service.setAutomaticEnabled(true);
+
+    expect(executor.createCount).toBe(2);
+  });
+
+  it('preserves the original backup error when recording failure also fails', async () => {
+    const settings = new MemorySettings();
+    settings.failRecordFailure = true;
+    const executor = new FakeExecutor();
+    const original = new FinanceHubError(
+      ERROR_CODES.backupIoFailure,
+      'original safe failure',
+    );
+    executor.failure = original;
+    const service = new BackupService(
+      executor, settings, fixedClock(), immediateWrites(),
+    );
+
+    await expect(service.createNow()).rejects.toBe(original);
+    await expect(service.getStatus()).resolves.toMatchObject({
+      isRunning: false,
+      statusWarning: {
+        code: ERROR_CODES.backupStatusUpdateFailure,
+      },
+    });
+  });
+
   it('keeps a published backup successful when retention cleanup fails', async () => {
     const settings = new MemorySettings();
     const executor = new FakeExecutor();
@@ -315,6 +377,8 @@ class MemorySettings implements BackupSettingsRepository {
     retentionCount: 7,
   };
   failRecordSuccess = false;
+  failRecordFailure = false;
+  failSetRetentionCount = false;
 
   get() {
     return this.value;
@@ -330,6 +394,9 @@ class MemorySettings implements BackupSettingsRepository {
   }
 
   recordFailure(issue: StoredBackupIssue) {
+    if (this.failRecordFailure) {
+      throw new Error('simulated failure recording failure');
+    }
     this.value = { ...this.value, lastError: issue };
   }
 
@@ -338,6 +405,9 @@ class MemorySettings implements BackupSettingsRepository {
   }
 
   setRetentionCount(retentionCount: 3 | 7 | 14 | 30) {
+    if (this.failSetRetentionCount) {
+      throw new Error('simulated retention settings failure');
+    }
     this.value = { ...this.value, retentionCount };
   }
 

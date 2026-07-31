@@ -2,7 +2,9 @@ import {
   existsSync,
   mkdtempSync,
   readdirSync,
+  renameSync,
   rmSync,
+  writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -258,8 +260,19 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     const backupButton = page.getByTestId('backup-now');
     await expect(backupButton).toBeEnabled();
     const countBefore = await backupCount(page);
+    const completionStatuses = await page.evaluate(async () => {
+      const creation = window.financeHub.backups.createNow();
+      const completion = window.financeHub.backups.waitForCurrentBackup();
+      return Promise.all([creation, completion]);
+    });
+    expect(completionStatuses).toHaveLength(2);
+    expect(completionStatuses[0].isRunning).toBe(false);
+    expect(completionStatuses[1].isRunning).toBe(false);
+    expect(completionStatuses[0].validBackupCount).toBe(countBefore + 1);
+    expect(completionStatuses[1].validBackupCount).toBe(countBefore + 1);
+
     await backupButton.click();
-    await expect.poll(() => backupCount(page)).toBe(countBefore + 1);
+    await expect.poll(() => backupCount(page)).toBe(countBefore + 2);
     await expect(page.getByText('備份狀態正常')).toBeVisible();
     expect(
       readdirSync(path.join(userDataDirectory, 'backups')).filter(
@@ -267,7 +280,22 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
           entry.startsWith('backup-') ||
           entry.startsWith('FinanceHub-backup-'),
       ).length,
-    ).toBe(countBefore + 1);
+    ).toBe(countBefore + 2);
+
+    const backupDirectory = path.join(userDataDirectory, 'backups');
+    renameSync(backupDirectory, `${backupDirectory}-held`);
+    writeFileSync(backupDirectory, 'simulated destination failure');
+    const backupFailure = await page.evaluate(async () => {
+      try {
+        await window.financeHub.backups.createNow();
+        return undefined;
+      } catch (error) {
+        return error;
+      }
+    });
+    expect(backupFailure).toEqual({
+      code: 'BACKUP_IO_FAILURE',
+    });
   } finally {
     await application?.close();
     rmSync(userDataDirectory, { recursive: true, force: true });

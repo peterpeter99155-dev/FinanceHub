@@ -144,6 +144,37 @@ describe('EncryptedBackupService', () => {
     writer.close();
   });
 
+  it('releases the write gate when checkpoint itself throws', async () => {
+    const root = temporaryRoot();
+    const databasePath = path.join(root, 'financehub.db');
+    const connection = await openOrCreateEncryptedDatabase(
+      databasePath,
+      PASSWORD,
+    );
+    const gate = new DatabaseWriteGate();
+    const service = new EncryptedBackupService(
+      connection.database,
+      databasePath,
+      path.join(root, 'backups'),
+      'test',
+      gate,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      () => {
+        throw new Error('simulated checkpoint failure');
+      },
+    );
+
+    await expect(service.createBackup()).rejects.toMatchObject({
+      code: ERROR_CODES.backupIoFailure,
+    });
+    await expect(gate.runWrite(() => 'released')).resolves.toBe('released');
+    expect(readdirSync(path.join(root, 'backups'))).toEqual([]);
+    connection.close();
+  });
+
   it('does not treat missing sidecar as a backup and preserves the database', async () => {
     const root = temporaryRoot();
     const databasePath = path.join(root, 'financehub.db');
@@ -223,6 +254,45 @@ describe('EncryptedBackupService', () => {
     expect(readFileSync(databasePath)).toEqual(before);
     connection.close();
   });
+
+  it.each(['ENOSPC', 'EACCES'] as const)(
+    'maps injected %s writes to a safe error without publishing or changing source data',
+    async (code) => {
+      const root = temporaryRoot();
+      const databasePath = path.join(root, 'financehub.db');
+      const connection = await openOrCreateEncryptedDatabase(
+        databasePath,
+        PASSWORD,
+      );
+      const databaseBefore = readFileSync(databasePath);
+      const metadataBefore = readFileSync(`${databasePath}.metadata.json`);
+      const backups = path.join(root, 'backups');
+      const service = new EncryptedBackupService(
+        connection.database,
+        databasePath,
+        backups,
+        'test',
+        new DatabaseWriteGate(),
+        undefined,
+        undefined,
+        undefined,
+        async () => {
+          throw Object.assign(new Error(`simulated ${code}`), { code });
+        },
+      );
+
+      expect(await toIpcResult(() => service.createBackup())).toEqual({
+        ok: false,
+        code: ERROR_CODES.backupIoFailure,
+      });
+      expect(readFileSync(databasePath)).toEqual(databaseBefore);
+      expect(readFileSync(`${databasePath}.metadata.json`)).toEqual(
+        metadataBefore,
+      );
+      expect(readdirSync(backups)).toEqual([]);
+      connection.close();
+    },
+  );
 
   it('does not overwrite an existing backup when backupId collides', async () => {
     const root = temporaryRoot();
@@ -486,6 +556,45 @@ describe('EncryptedBackupService', () => {
     await expect(validateBackupDirectory(quarantine)).resolves.toMatchObject({
       backupId: ids[3],
     });
+
+    await service.cleanupIncompleteBackups();
+    expect(existsSync(heldOriginal)).toBe(true);
+    expect(existsSync(quarantine)).toBe(true);
+    expect(readdirSync(quarantine).sort()).toEqual([
+      'financehub.db',
+      'financehub.db.metadata.json',
+      'manifest.json',
+    ]);
+    connection.close();
+  });
+
+  it('resumes only an identity-matching partial quarantine and deletes manifest last', async () => {
+    const root = temporaryRoot();
+    const databasePath = path.join(root, 'financehub.db');
+    const connection = await openOrCreateEncryptedDatabase(
+      databasePath,
+      PASSWORD,
+    );
+    const backups = path.join(root, 'backups');
+    const backupId = '95555555-5555-4555-8555-555555555555';
+    const service = new EncryptedBackupService(
+      connection.database,
+      databasePath,
+      backups,
+      'test',
+      new DatabaseWriteGate(),
+      () => new Date('2026-07-31T00:00:00.000Z'),
+      () => backupId,
+    );
+    await service.createBackup();
+    const published = findBackupDirectory(backups, backupId)!;
+    const quarantine = path.join(backups, `.deleting-${backupId}`);
+    renameSync(published, quarantine);
+    rmSync(path.join(quarantine, 'financehub.db'));
+
+    await service.cleanupIncompleteBackups();
+
+    expect(existsSync(quarantine)).toBe(false);
     connection.close();
   });
 });

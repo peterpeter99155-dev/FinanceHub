@@ -4,6 +4,7 @@ import {
   lstat,
   mkdir,
   open,
+  readFile,
   readdir,
   realpath,
   rename,
@@ -30,6 +31,7 @@ import {
   createBackupId,
   creatingDirectoryName,
   describeBackupFile,
+  parseBackupManifest,
   validateBackupDirectory,
   type BackupManifestV1,
 } from './backup-format';
@@ -41,6 +43,8 @@ interface CheckpointResult {
 }
 
 type MoveDirectory = (source: string, target: string) => Promise<void>;
+type CopyBackupFile = (source: string, target: string) => Promise<void>;
+type RunCheckpoint = (database: SqliteDatabase) => CheckpointResult[];
 
 export class EncryptedBackupService implements BackupExecutor {
   readonly dataDirectory: string;
@@ -54,6 +58,8 @@ export class EncryptedBackupService implements BackupExecutor {
     private readonly now: () => Date = () => new Date(),
     private readonly makeBackupId: () => string = createBackupId,
     private readonly moveForCleanup: MoveDirectory = rename,
+    private readonly copyBackupFile: CopyBackupFile = copyAndSync,
+    private readonly runCheckpoint: RunCheckpoint = checkpointDatabase,
   ) {
     this.dataDirectory = path.dirname(databasePath);
   }
@@ -77,7 +83,11 @@ export class EncryptedBackupService implements BackupExecutor {
       }
       const candidate = path.join(this.backupDirectory, entry.name);
       if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
-      await removeOwnedTemporaryDirectory(this.backupDirectory, candidate);
+      if (entry.name.startsWith('.deleting-')) {
+        await resumeQuarantineDeletion(this.backupDirectory, candidate);
+      } else {
+        await removeOwnedTemporaryDirectory(this.backupDirectory, candidate);
+      }
     }
   }
 
@@ -192,18 +202,7 @@ export class EncryptedBackupService implements BackupExecutor {
     await mkdir(this.backupDirectory, { recursive: true });
     await this.cleanupIncompleteBackups();
 
-    const previousBusyTimeout = Number(
-      this.database.pragma('busy_timeout', { simple: true }),
-    );
-    this.database.pragma('busy_timeout = 500');
-    let checkpoint: CheckpointResult[];
-    try {
-      checkpoint = this.database.pragma(
-        'wal_checkpoint(TRUNCATE)',
-      ) as CheckpointResult[];
-    } finally {
-      this.database.pragma(`busy_timeout = ${previousBusyTimeout}`);
-    }
+    const checkpoint = this.runCheckpoint(this.database);
     if (checkpoint.length !== 1 || checkpoint[0].busy !== 0) {
       throw new FinanceHubError(
         ERROR_CODES.backupCheckpointBusy,
@@ -222,8 +221,11 @@ export class EncryptedBackupService implements BackupExecutor {
       await mkdir(temporaryDirectory, { recursive: false });
       const databaseTarget = path.join(temporaryDirectory, BACKUP_DATABASE_FILE);
       const metadataTarget = path.join(temporaryDirectory, BACKUP_METADATA_FILE);
-      await copyAndSync(this.databasePath, databaseTarget);
-      await copyAndSync(`${this.databasePath}.metadata.json`, metadataTarget);
+      await this.copyBackupFile(this.databasePath, databaseTarget);
+      await this.copyBackupFile(
+        `${this.databasePath}.metadata.json`,
+        metadataTarget,
+      );
 
       const parsedMetadata = await readEncryptionMetadata(metadataTarget);
       const schema = this.database
@@ -298,6 +300,20 @@ function backupExportFailure(): FinanceHubError {
     ERROR_CODES.backupExportFailure,
     '匯出備份時發生檔案系統錯誤。',
   );
+}
+
+function checkpointDatabase(database: SqliteDatabase): CheckpointResult[] {
+  const previousBusyTimeout = Number(
+    database.pragma('busy_timeout', { simple: true }),
+  );
+  database.pragma('busy_timeout = 500');
+  try {
+    return database.pragma(
+      'wal_checkpoint(TRUNCATE)',
+    ) as CheckpointResult[];
+  } finally {
+    database.pragma(`busy_timeout = ${previousBusyTimeout}`);
+  }
 }
 
 async function copyAndSync(source: string, target: string): Promise<void> {
@@ -411,6 +427,83 @@ async function quarantineAndDeleteBackup(
     await rm(target);
   }
   await rmdir(quarantine);
+}
+
+async function resumeQuarantineDeletion(
+  root: string,
+  candidate: string,
+): Promise<void> {
+  const [rootInfo, candidateInfo, resolvedRoot, resolvedCandidate] =
+    await Promise.all([
+      lstat(root),
+      lstat(candidate),
+      realpath(root),
+      realpath(candidate),
+    ]);
+  if (
+    !rootInfo.isDirectory() ||
+    rootInfo.isSymbolicLink() ||
+    !candidateInfo.isDirectory() ||
+    candidateInfo.isSymbolicLink() ||
+    path.dirname(resolvedCandidate) !== resolvedRoot
+  ) {
+    return;
+  }
+
+  const entries = await readdir(candidate, { withFileTypes: true });
+  if (entries.length === 0) {
+    await rmdir(candidate);
+    return;
+  }
+  const expected = new Set([
+    BACKUP_DATABASE_FILE,
+    BACKUP_METADATA_FILE,
+    BACKUP_MANIFEST_FILE,
+  ]);
+  if (
+    !entries.some(({ name }) => name === BACKUP_MANIFEST_FILE) ||
+    entries.some((entry) =>
+      !expected.has(entry.name) ||
+      !entry.isFile() ||
+      entry.isSymbolicLink()
+    )
+  ) {
+    return;
+  }
+
+  let manifest: BackupManifestV1;
+  try {
+    manifest = parseBackupManifest(JSON.parse(
+      await readFile(
+        path.join(candidate, BACKUP_MANIFEST_FILE),
+        'utf8',
+      ),
+    ));
+  } catch {
+    return;
+  }
+  const quarantineId = path.basename(candidate).slice(
+    '.deleting-'.length,
+  );
+  if (manifest.backupId !== quarantineId) return;
+
+  for (const record of [manifest.database, manifest.metadata]) {
+    if (entries.some(({ name }) => name === record.file)) {
+      const actual = await describeBackupFile(
+        path.join(candidate, record.file),
+        record.file,
+      );
+      if (!sameFile(actual, record)) return;
+    }
+  }
+
+  for (const file of [BACKUP_DATABASE_FILE, BACKUP_METADATA_FILE]) {
+    if (entries.some(({ name }) => name === file)) {
+      await rm(path.join(candidate, file));
+    }
+  }
+  await rm(path.join(candidate, BACKUP_MANIFEST_FILE));
+  await rmdir(candidate);
 }
 
 function sameManifest(
