@@ -59,6 +59,18 @@ describe('backup format v1', () => {
     );
   });
 
+  it.each([
+    'financehub.db',
+    'financehub.db.metadata.json',
+    'manifest.json',
+  ])('rejects a backup missing %s', async (file) => {
+    const root = validDirectory();
+    rmSync(path.join(root, file));
+    await expect(validateBackupDirectory(root)).rejects.toSatisfy(
+      invalidFormat,
+    );
+  });
+
   it('rejects a symlink or junction in place of an expected file', async () => {
     const root = validDirectory();
     const database = path.join(root, 'financehub.db');
