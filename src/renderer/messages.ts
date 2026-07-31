@@ -93,6 +93,35 @@ export function transactionErrorMessage(error: unknown): string {
   return '交易儲存失敗，請確認輸入內容。';
 }
 
+export function backupErrorMessage(error: unknown): string {
+  const code = errorCodeOf(error);
+  if (code === ERROR_CODES.backupInProgress) {
+    return '已有備份正在進行。';
+  }
+  if (code === ERROR_CODES.backupCheckpointBusy) {
+    return '資料庫目前忙碌，請稍後再試。';
+  }
+  if (code === ERROR_CODES.backupSourceInvalid) {
+    return '備份所需的資料檔案不完整。';
+  }
+  if (code === ERROR_CODES.backupFormatInvalid) {
+    return '備份格式或完整性驗證失敗。';
+  }
+  if (code === ERROR_CODES.backupWriteQueueFull) {
+    return '等待中的資料操作過多，請稍後再試。';
+  }
+  if (code === ERROR_CODES.backupIoFailure) {
+    return '無法存取備份資料夾，請稍後再試。';
+  }
+  if (code === ERROR_CODES.backupExportUnavailable) {
+    return '目前沒有可匯出的有效備份，請先建立備份。';
+  }
+  if (code === ERROR_CODES.backupExportFailure) {
+    return '無法匯出最新備份，請確認目的資料夾後再試。';
+  }
+  return '備份操作未完成，請稍後再試。';
+}
+
 function formatTwd(value: number): string {
   return `TWD ${new Intl.NumberFormat('zh-TW', {
     maximumFractionDigits: 0,

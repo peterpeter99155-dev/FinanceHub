@@ -45,6 +45,11 @@ export const STATUS_LABELS: Readonly<Record<DataStatus, string>> = {
   pending_confirmation: '我之後再確認',
 };
 
+export const MANUAL_DATA_STATUSES = [
+  'confirmed',
+  'pending_confirmation',
+] as const satisfies readonly DataStatus[];
+
 export const TRANSACTION_KIND_LABELS: Readonly<
   Record<TransactionKind, string>
 > = {

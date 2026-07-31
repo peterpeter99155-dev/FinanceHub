@@ -103,6 +103,10 @@ export function useAppController() {
       const itemDraft: FinancialItemDraft = {
         ...draft,
         amount: Number(draft.amount),
+        status:
+          draft.status === 'pending_confirmation'
+            ? 'pending_confirmation'
+            : 'confirmed',
       };
       const snapshot = editingId
         ? await window.financeHub.financialItems.update(
@@ -127,7 +131,10 @@ export function useAppController() {
       type: item.type,
       customTypeId: item.customTypeId,
       amount: String(item.amount),
-      status: item.status,
+      status:
+        item.status === 'pending_confirmation'
+          ? 'pending_confirmation'
+          : 'confirmed',
       includeInNetWorth: item.includeInNetWorth,
     });
     setActionError(null);

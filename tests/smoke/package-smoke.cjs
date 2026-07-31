@@ -29,6 +29,10 @@ const TEST_ONLY_PASSWORDS = [
   'S3-Browser-Password!',
   'FinanceHub v1 fixture password for fake data only',
   'S3-Installed-Acceptance!',
+  'S4-Backup-Test-Password!',
+  'S3 known vector password',
+  'daff531a5fd5f62311f74c035a2a08296d9bfcfeed0e10f932c9bbc5a7c65dcb',
+  '97a70cdae46927b8ee76f6050c34f942678e2087c46ccc815cf4f7708ac8c3a3',
 ];
 
 async function main() {
@@ -116,6 +120,7 @@ async function main() {
         'Database remained locked: true',
         'Financial IPC rejected before unlock: true',
         'Test-only passwords in production bundle: 0',
+        'Known test-derived keys in production bundle: 0',
         '',
       ].join('\n'),
     );

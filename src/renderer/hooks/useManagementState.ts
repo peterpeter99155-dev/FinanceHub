@@ -18,9 +18,9 @@ export function useManagementState() {
   const [managementError, setManagementError] = useState<string | null>(
     null,
   );
-  const [activeView, setActiveView] = useState<'assets' | 'transactions'>(
-    'assets',
-  );
+  const [activeView, setActiveView] = useState<
+    'assets' | 'transactions' | 'backups'
+  >('assets');
   const [typeManagementVersion, setTypeManagementVersion] = useState(0);
 
   return {

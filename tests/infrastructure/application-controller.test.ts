@@ -54,9 +54,22 @@ describe('ApplicationController unlock boundary', () => {
 
     expect(databaseOpened).toBe(true);
     expect(servicesCreated).toBe(true);
-    controller.close();
+    await controller.close();
     expect(databaseClosed).toBe(true);
     expect(registry.has(IPC_CHANNELS.listFinancialItems)).toBe(true);
+    expect(registry.has(IPC_CHANNELS.getBackupStatus)).toBe(true);
+    expect(registry.has(IPC_CHANNELS.waitForBackupCompletion)).toBe(true);
+    expect(registry.has(IPC_CHANNELS.createBackupNow)).toBe(true);
+    expect(registry.has(IPC_CHANNELS.setAutomaticBackupEnabled)).toBe(true);
+    expect(registry.has(IPC_CHANNELS.setBackupRetentionCount)).toBe(true);
+    expect(registry.has(IPC_CHANNELS.openBackupDirectory)).toBe(true);
+    expect(registry.has(IPC_CHANNELS.exportLatestBackup)).toBe(true);
+    await expect(
+      registry.invoke(IPC_CHANNELS.openBackupDirectory),
+    ).resolves.toBeUndefined();
+    await expect(
+      registry.invoke(IPC_CHANNELS.exportLatestBackup),
+    ).resolves.toBe('cancelled');
     expect(registry.has(IPC_CHANNELS.unlockDatabase)).toBe(false);
   });
 });

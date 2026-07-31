@@ -1,4 +1,11 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
@@ -240,6 +247,55 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
         exact: true,
       }),
     ).toBeVisible();
+
+    await expect(page.getByText('僅限假資料')).toHaveCount(0);
+    await expect(page.getByText('本機加密儲存')).toBeVisible();
+    await page.getByRole('button', { name: '資料與備份' }).click();
+    await expect(
+      page.getByRole('heading', { name: '資料與備份' }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(userDataDirectory, { exact: true }),
+    ).toBeVisible();
+    const backupButton = page.getByTestId('backup-now');
+    await expect(backupButton).toBeEnabled();
+    const countBefore = await backupCount(page);
+    const completionStatuses = await page.evaluate(async () => {
+      const creation = window.financeHub.backups.createNow();
+      const completion = window.financeHub.backups.waitForCurrentBackup();
+      return Promise.all([creation, completion]);
+    });
+    expect(completionStatuses).toHaveLength(2);
+    expect(completionStatuses[0].isRunning).toBe(false);
+    expect(completionStatuses[1].isRunning).toBe(false);
+    expect(completionStatuses[0].validBackupCount).toBe(countBefore + 1);
+    expect(completionStatuses[1].validBackupCount).toBe(countBefore + 1);
+
+    await backupButton.click();
+    await expect.poll(() => backupCount(page)).toBe(countBefore + 2);
+    await expect(page.getByText('備份狀態正常')).toBeVisible();
+    expect(
+      readdirSync(path.join(userDataDirectory, 'backups')).filter(
+        (entry) =>
+          entry.startsWith('backup-') ||
+          entry.startsWith('FinanceHub-backup-'),
+      ).length,
+    ).toBe(countBefore + 2);
+
+    const backupDirectory = path.join(userDataDirectory, 'backups');
+    renameSync(backupDirectory, `${backupDirectory}-held`);
+    writeFileSync(backupDirectory, 'simulated destination failure');
+    const backupFailure = await page.evaluate(async () => {
+      try {
+        await window.financeHub.backups.createNow();
+        return undefined;
+      } catch (error) {
+        return error;
+      }
+    });
+    expect(backupFailure).toEqual({
+      code: 'BACKUP_IO_FAILURE',
+    });
   } finally {
     await application?.close();
     rmSync(userDataDirectory, { recursive: true, force: true });
@@ -294,6 +350,14 @@ async function setupDatabase(
     .getByRole('button', { name: '建立加密資料庫' })
     .click();
   await expect(page.getByTestId('net-worth')).toBeVisible();
+}
+
+async function backupCount(page: Page): Promise<number> {
+  const text = await page
+    .locator('.backup-facts')
+    .getByText(/^\d+ \/ \d+ 份$/)
+    .textContent();
+  return Number.parseInt(text ?? '', 10);
 }
 
 async function unlockDatabase(page: Page): Promise<void> {

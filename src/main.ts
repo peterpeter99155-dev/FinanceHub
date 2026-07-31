@@ -1,7 +1,9 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   ipcMain,
+  shell,
 } from 'electron';
 import path from 'node:path';
 
@@ -10,12 +12,14 @@ import {
   type IpcHandlerRegistry,
 } from './infrastructure/main/application-controller';
 import { toIpcResult } from './shared/ipc-result';
+import { ERROR_CODES, FinanceHubError } from './shared/errors';
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 
 let mainWindow: BrowserWindow | null = null;
 let controller: ApplicationController | null = null;
+let shutdownStarted = false;
 
 const ipcRegistry: IpcHandlerRegistry = {
   handle: (channel, operation) => {
@@ -58,6 +62,26 @@ void app.whenReady().then(() => {
   controller = new ApplicationController(
     databasePath,
     ipcRegistry,
+    undefined,
+    undefined,
+    app.getVersion(),
+    async (directory) => {
+      const message = await shell.openPath(directory);
+      if (message) {
+        throw new FinanceHubError(
+          ERROR_CODES.backupIoFailure,
+          '無法開啟備份資料夾。',
+        );
+      }
+    },
+    async () => {
+      const selection = await dialog.showOpenDialog({
+        title: '選擇匯出備份的位置',
+        buttonLabel: '匯出到這裡',
+        properties: ['openDirectory', 'createDirectory'],
+      });
+      return selection.canceled ? undefined : selection.filePaths[0];
+    },
   );
   controller.registerLockedHandlers();
   createWindow();
@@ -69,9 +93,13 @@ void app.whenReady().then(() => {
   });
 });
 
-app.on('before-quit', () => {
-  controller?.close();
+app.on('before-quit', (event) => {
+  if (shutdownStarted || !controller) return;
+  event.preventDefault();
+  shutdownStarted = true;
+  const closingController = controller;
   controller = null;
+  void closingController.close().finally(() => app.quit());
 });
 
 app.on('window-all-closed', () => {

@@ -22,6 +22,7 @@ import type {
 import {
   type IpcResult,
 } from './shared/ipc-result';
+import type { BackupStatus } from './shared/backups';
 
 async function invoke<T>(
   channel: string,
@@ -161,6 +162,34 @@ const financeHubApi: FinanceHubApi = Object.freeze({
         id,
         year,
         month,
+      ),
+  }),
+  backups: Object.freeze({
+    getStatus: () =>
+      invoke<BackupStatus>(IPC_CHANNELS.getBackupStatus),
+    waitForCurrentBackup: () =>
+      invoke<BackupStatus>(IPC_CHANNELS.waitForBackupCompletion),
+    createNow: () =>
+      invoke<BackupStatus>(IPC_CHANNELS.createBackupNow),
+    setAutomaticEnabled: (enabled: boolean) =>
+      invoke<BackupStatus>(
+        IPC_CHANNELS.setAutomaticBackupEnabled,
+        enabled,
+      ),
+    setRetentionCount: (
+      retentionCount: 3 | 7 | 14 | 30,
+      confirmRemoval = false,
+    ) =>
+      invoke<BackupStatus>(
+        IPC_CHANNELS.setBackupRetentionCount,
+        retentionCount,
+        confirmRemoval,
+      ),
+    openDirectory: () =>
+      invoke<void>(IPC_CHANNELS.openBackupDirectory),
+    exportLatest: () =>
+      invoke<'exported' | 'cancelled'>(
+        IPC_CHANNELS.exportLatestBackup,
       ),
   }),
 });

@@ -2,8 +2,8 @@
 
 ## 文件資訊
 
-- 版本：1.4
-- 日期：2026-07-29
+- 版本：1.5
+- 日期：2026-07-31
 - 狀態：**正式生效**
 - 適用範圍：所有 Sprint，不隨 Sprint 變動
 - 維護方式：每次新增例外或決策，同步記入 `04_Decision_Log.md`
@@ -19,6 +19,12 @@
 - 只寫在 Sprint Review 裡的教訓**不會改變未來行為** —— Review 是歷史記錄，不在必讀清單內。
 
 ### 修訂紀錄
+
+**1.5（2026-07-31）** Sprint 04 備份介面確認後補入：
+
+- 第 6.2 節：所有新建或修改的操作結果提示，必須遵守
+  `00_UI_Feedback_Rules.md`；備份頁的核心呈現由 Browser E2E
+  強制，其他既有提示依觸及範圍逐步遷移。
 
 **1.4（2026-07-29）** Sprint 03 階段 0 期間補入一條：
 
@@ -284,6 +290,17 @@ useLayoutEffect(() => {
 
 判斷標準：**這個延遲是「功能的一部分」，還是「為了等畫面更新」？** 後者一律禁止。
 
+### 6.2 操作結果提示
+
+所有新建或修改的成功、失敗、警告與資訊提示，必須遵守
+`00_UI_Feedback_Rules.md`。不得自行新增另一套位置、顏色、圖示、
+顯示時間或非同步按鈕規則。
+
+能直接驗證的部分必須加入對應 E2E；目前備份頁由
+`tests/e2e/backup-settings.spec.ts` 強制成功／失敗 tone、情境位置、
+不透明對話框及窄畫面行為。其他既有提示在後續修改到該流程時遷移，
+本條不授權無關 Sprint 進行全面 UI 重構。
+
 ---
 
 ## 7. 命名
@@ -453,6 +470,7 @@ await expect(
 | infrastructure 不得 import domain 驗證與計算函式 | 以 TypeScript AST 檢查 domain named import 的 `assert`、`calculate`、`compute`、`validate`、`apply`、`reverse`、`sum` 等函式 | `scripts/verify-architecture.cjs` |
 | diff 不得被純換行或空白假差異掩蓋 | 比對 `git diff`、`git diff -w` 與 `--ignore-space-at-eol` 的檔案與行數 | `scripts/verify-architecture.cjs` |
 | 變更規模異常時必須警告 | 相對 `main` merge-base 超過 25 檔或 1,500 行時輸出警告但不誤判為規則失敗 | `scripts/verify-architecture.cjs` |
+| 備份頁操作提示符合 UI 回饋規範 | Browser E2E 實際觸發成功與失敗，檢查 tone、位置、不透明對話框及窄畫面 | `tests/e2e/backup-settings.spec.ts` |
 
 ### 尚未機械化、值得未來補上的
 

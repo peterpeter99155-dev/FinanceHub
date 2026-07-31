@@ -1,4 +1,5 @@
 import { CategoryService } from '../../application/category-service';
+import { BackupService } from '../../application/backup-service';
 import path from 'node:path';
 import { FinancialItemCustomTypeService } from '../../application/financial-item-custom-type-service';
 import { FinancialItemService } from '../../application/financial-item-service';
@@ -10,6 +11,8 @@ import {
 import { FinanceHubError, ERROR_CODES } from '../../shared/errors';
 import type { BootstrapDatabase } from '../database/bootstrap-database';
 import { openOrCreateEncryptedDatabase } from '../database/encrypted-database';
+import { EncryptedBackupService } from '../backup/encrypted-backup-service';
+import { SqliteBackupSettingsRepository } from '../database/sqlite-backup-settings-repository';
 import { SqliteCategoryRepository } from '../database/sqlite-category-repository';
 import { SqliteFinancialItemCustomTypeRepository } from '../database/sqlite-financial-item-custom-type-repository';
 import { SqliteFinancialItemRepository } from '../database/sqlite-financial-item-repository';
@@ -18,6 +21,8 @@ import {
   databasePaths,
   inspectDatabaseFiles,
 } from '../security/database-metadata';
+import { DatabaseWriteGate } from './database-write-gate';
+import { systemClock } from '../../application/ports/clock';
 
 export type IpcOperation = (...args: readonly unknown[]) => unknown;
 
@@ -42,8 +47,12 @@ type ServiceFactory = (
   connection: BootstrapDatabase,
 ) => FinancialServices;
 
+type DirectoryOpener = (directory: string) => Promise<void>;
+type ExportDirectorySelector = () => Promise<string | undefined>;
+
 export class ApplicationController {
   private connection: BootstrapDatabase | undefined;
+  private writeGate: DatabaseWriteGate | undefined;
   private state: 'locked' | 'unlocking' | 'unlocked' = 'locked';
 
   constructor(
@@ -53,6 +62,11 @@ export class ApplicationController {
       openOrCreateEncryptedDatabase,
     private readonly createServices: ServiceFactory =
       createFinancialServices,
+    private readonly applicationVersion = '0.1.0',
+    private readonly openDirectory: DirectoryOpener =
+      async () => undefined,
+    private readonly selectExportDirectory: ExportDirectorySelector =
+      async () => undefined,
   ) {}
 
   registerLockedHandlers(): void {
@@ -66,9 +80,11 @@ export class ApplicationController {
     );
   }
 
-  close(): void {
+  async close(): Promise<void> {
+    await this.writeGate?.closeAndDrain();
     this.connection?.close();
     this.connection = undefined;
+    this.writeGate = undefined;
     this.state = 'locked';
   }
 
@@ -108,10 +124,38 @@ export class ApplicationController {
         password,
       );
       const services = this.createServices(connection);
-      registerFinancialHandlers(this.registry, services);
+      const writeGate = new DatabaseWriteGate(100);
+      const backupExecutor = new EncryptedBackupService(
+        connection.database,
+        this.databasePath,
+        path.join(path.dirname(this.databasePath), 'backups'),
+        this.applicationVersion,
+        writeGate,
+      );
+      const backups = new BackupService(
+        backupExecutor,
+        new SqliteBackupSettingsRepository(connection.database),
+        systemClock,
+        writeGate,
+      );
+      registerFinancialHandlers(
+        this.registry,
+        services,
+        writeGate,
+        backups,
+        () => this.openDirectory(backupExecutor.backupDirectory),
+        async () => {
+          const destination = await this.selectExportDirectory();
+          if (!destination) return 'cancelled';
+          await backups.exportLatest(destination);
+          return 'exported';
+        },
+      );
       this.connection = connection;
+      this.writeGate = writeGate;
       this.state = 'unlocked';
       this.registry.removeHandler(IPC_CHANNELS.unlockDatabase);
+      void backups.attemptAutomaticAfterUnlock().catch(() => undefined);
     } catch (error) {
       connection?.close();
       this.state = 'locked';
@@ -175,59 +219,79 @@ function createFinancialServices(
 function registerFinancialHandlers(
   registry: IpcHandlerRegistry,
   services: FinancialServices,
+  writeGate: DatabaseWriteGate,
+  backups: BackupService,
+  openBackupDirectory: () => Promise<void>,
+  exportLatestBackup: () => Promise<'exported' | 'cancelled'>,
 ): void {
   registry.handle(IPC_CHANNELS.listFinancialItems, () =>
     services.financialItems.list(),
   );
   registry.handle(
     IPC_CHANNELS.createFinancialItem,
-    (draft: unknown) => services.financialItems.create(draft),
+    (draft: unknown) => writeGate.runWrite(
+      () => services.financialItems.create(draft),
+    ),
   );
   registry.handle(
     IPC_CHANNELS.updateFinancialItem,
-    (id: unknown, draft: unknown) =>
-      services.financialItems.update(id, draft),
+    (id: unknown, draft: unknown) => writeGate.runWrite(
+      () => services.financialItems.update(id, draft),
+    ),
   );
   registry.handle(
     IPC_CHANNELS.deleteFinancialItem,
-    (id: unknown) => services.financialItems.delete(id),
+    (id: unknown) => writeGate.runWrite(
+      () => services.financialItems.delete(id),
+    ),
   );
   registry.handle(IPC_CHANNELS.listCategories, () =>
     services.categories.list(),
   );
   registry.handle(
     IPC_CHANNELS.createCategory,
-    (draft: unknown) => services.categories.create(draft),
+    (draft: unknown) => writeGate.runWrite(
+      () => services.categories.create(draft),
+    ),
   );
   registry.handle(
     IPC_CHANNELS.updateCategory,
-    (id: unknown, draft: unknown) =>
-      services.categories.update(id, draft),
+    (id: unknown, draft: unknown) => writeGate.runWrite(
+      () => services.categories.update(id, draft),
+    ),
   );
   registry.handle(
     IPC_CHANNELS.deleteCategory,
-    (id: unknown) => services.categories.delete(id),
+    (id: unknown) => writeGate.runWrite(
+      () => services.categories.delete(id),
+    ),
   );
   registry.handle(
     IPC_CHANNELS.reassignAndDeleteCategory,
-    (id: unknown, replacementId: unknown) =>
-      services.categories.reassignAndDelete(id, replacementId),
+    (id: unknown, replacementId: unknown) => writeGate.runWrite(
+      () => services.categories.reassignAndDelete(id, replacementId),
+    ),
   );
   registry.handle(IPC_CHANNELS.listFinancialItemCustomTypes, () =>
     services.customTypes.list(),
   );
   registry.handle(
     IPC_CHANNELS.createFinancialItemCustomType,
-    (draft: unknown) => services.customTypes.create(draft),
+    (draft: unknown) => writeGate.runWrite(
+      () => services.customTypes.create(draft),
+    ),
   );
   registry.handle(
     IPC_CHANNELS.updateFinancialItemCustomType,
-    (id: unknown, draft: unknown) =>
-      services.customTypes.update(id, draft),
+    (id: unknown, draft: unknown) => writeGate.runWrite(
+      () => services.customTypes.update(id, draft),
+    ),
   );
   registry.handle(
     IPC_CHANNELS.deleteFinancialItemCustomType,
-    (id: unknown) => services.customTypes.delete(id),
+    (id: unknown) => writeGate.runWrite(
+      () => services.customTypes.delete(id),
+    ),
   );
   registry.handle(
     IPC_CHANNELS.listTransactionsByMonth,
@@ -240,7 +304,9 @@ function registerFinancialHandlers(
       draft: unknown,
       year: unknown,
       month: unknown,
-    ) => services.transactions.create(draft, year, month),
+    ) => writeGate.runWrite(
+      () => services.transactions.create(draft, year, month),
+    ),
   );
   registry.handle(
     IPC_CHANNELS.updateTransaction,
@@ -249,11 +315,40 @@ function registerFinancialHandlers(
       draft: unknown,
       year: unknown,
       month: unknown,
-    ) => services.transactions.update(id, draft, year, month),
+    ) => writeGate.runWrite(
+      () => services.transactions.update(id, draft, year, month),
+    ),
   );
   registry.handle(
     IPC_CHANNELS.deleteTransaction,
-    (id: unknown, year: unknown, month: unknown) =>
-      services.transactions.delete(id, year, month),
+    (id: unknown, year: unknown, month: unknown) => writeGate.runWrite(
+      () => services.transactions.delete(id, year, month),
+    ),
+  );
+  registry.handle(IPC_CHANNELS.getBackupStatus, () =>
+    backups.getStatus(),
+  );
+  registry.handle(IPC_CHANNELS.waitForBackupCompletion, () =>
+    backups.waitForCurrentBackup(),
+  );
+  registry.handle(IPC_CHANNELS.createBackupNow, () =>
+    backups.createNow(),
+  );
+  registry.handle(
+    IPC_CHANNELS.setAutomaticBackupEnabled,
+    (enabled: unknown) => backups.setAutomaticEnabled(enabled),
+  );
+  registry.handle(
+    IPC_CHANNELS.setBackupRetentionCount,
+    (retentionCount: unknown, confirmRemoval: unknown) =>
+      backups.setRetentionCount(retentionCount, confirmRemoval),
+  );
+  registry.handle(
+    IPC_CHANNELS.openBackupDirectory,
+    openBackupDirectory,
+  );
+  registry.handle(
+    IPC_CHANNELS.exportLatestBackup,
+    exportLatestBackup,
   );
 }

@@ -9,6 +9,11 @@
 - 依據文件：`00_Architecture_Rules.md` v1.2、`00_Glossary.md` v1.1、`04_Decision_Log.md`
 - 對應程式狀態：commit `0a628d2`
 
+> 歷史狀態註記（2026-07-30）：本計畫記錄 G-01、G-04、G-05、
+> G-06「排入／移至 Sprint 03」是 Sprint 2.5 當時的真實範圍決議；
+> Sprint 03 最終未實作這些項目。目前狀態以 `00_Glossary.md` 與
+> `12_Sprint_03_Review.md` 為準。
+
 ### 修訂紀錄
 
 **1.3（2026-07-28）** 實作完成後補入：

@@ -7,6 +7,7 @@ import {
 } from './components/FinancialItemSummary';
 import { ManagementDialog } from './components/ManagementDialog';
 import { DeleteFinancialItemDialog } from './components/DeleteFinancialItemDialog';
+import { BackupSettingsView } from './components/BackupSettingsView';
 import { useAppController } from './hooks/useAppController';
 
 export function App() {
@@ -61,7 +62,7 @@ export function App() {
           <p className="eyebrow">本機財務管理</p>
           <h1>FinanceHub</h1>
         </div>
-        <span className="environment-badge">僅限假資料</span>
+        <span className="environment-badge">本機加密儲存</span>
       </header>
 
       {viewState.status === 'loading' && (
@@ -94,6 +95,13 @@ export function App() {
               onClick={() => setActiveView('transactions')}
             >
               收支紀錄
+            </button>
+            <button
+              className={activeView === 'backups' ? 'selected' : ''}
+              type="button"
+              onClick={() => setActiveView('backups')}
+            >
+              資料與備份
             </button>
           </nav>
 
@@ -194,7 +202,7 @@ export function App() {
             />
           </div>
             </>
-          ) : (
+          ) : activeView === 'transactions' ? (
             <TransactionsView
               accounts={viewState.snapshot.items}
               onBalancesChanged={loadItems}
@@ -204,6 +212,8 @@ export function App() {
               }
               typeManagementVersion={typeManagementVersion}
             />
+          ) : (
+            <BackupSettingsView />
           )}
         </>
       )}

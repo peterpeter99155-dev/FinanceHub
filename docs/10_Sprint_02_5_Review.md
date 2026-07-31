@@ -8,6 +8,11 @@
 - 結果：實作完成，等待確認後合併至 `main`
 - 計畫版本：`docs/09_Sprint_02_5_Plan.md` v1.3
 
+> 歷史狀態註記（2026-07-30）：本 Review 記錄 G-01、G-04、G-05、
+> G-06「已移至 Sprint 03」是 Sprint 2.5 結束時的真實決議；
+> Sprint 03 最終未實作這些項目。目前狀態以 `00_Glossary.md` 與
+> `12_Sprint_03_Review.md` 為準。
+
 ## Sprint Goal 回顧
 
 本 Sprint 未新增產品功能，主要目標是補齊 Sprint 01、Sprint 02 的端到端驗收，將財務判斷與 use case 編排移回正確分層，建立穩定的 IPC 錯誤契約，並拆分過大的 renderer 元件。

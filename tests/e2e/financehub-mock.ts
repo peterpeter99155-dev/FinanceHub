@@ -15,6 +15,7 @@ import {
   reverseBalanceEffect,
 } from '../../src/domain/transaction';
 import type { FinanceHubApi } from '../../src/shared/bootstrap';
+import type { BackupStatus } from '../../src/shared/backups';
 import type { FinancialItemDraft } from '../../src/shared/financial-items';
 import type {
   FinancialItemCustomTypeDraft,
@@ -88,6 +89,59 @@ function createApi(
     unlock(password: string): void;
   },
 ): FinanceHubApi {
+  let backupStatus: BackupStatus = {
+    automaticEnabled: true,
+    dataDirectory: 'C:\\FinanceHub-Test-Data',
+    backupDirectory: 'C:\\FinanceHub-Test-Data\\backups',
+    retentionCount: 7,
+    isRunning: false,
+    validBackupCount: 0,
+  };
+  const backupScenario = new URLSearchParams(window.location.search).get(
+    'backup',
+  );
+  if (backupScenario === 'running') {
+    backupStatus = { ...backupStatus, isRunning: true };
+  }
+  if (backupScenario === 'capacity') {
+    backupStatus = {
+      ...backupStatus,
+      validBackupCount: 7,
+      oldestSuccessfulAt: '2026-07-21T09:00:00.000Z',
+      lastSuccessfulAt: NOW,
+    };
+  }
+  if (backupScenario === 'retention-reduction') {
+    backupStatus = {
+      ...backupStatus,
+      retentionCount: 30,
+      validBackupCount: 4,
+      oldestSuccessfulAt: '2026-07-21T09:00:00.000Z',
+      lastSuccessfulAt: NOW,
+    };
+  }
+  if (backupScenario === 'warnings') {
+    backupStatus = {
+      ...backupStatus,
+      validBackupCount: 1,
+      lastSuccessfulAt: NOW,
+      lastError: {
+        code: 'BACKUP_IO_FAILURE',
+        message: '最近一次備份未完成。',
+        occurredAt: '2026-07-28T10:00:00.000Z',
+      },
+      cleanupWarning: {
+        code: 'BACKUP_CLEANUP_FAILURE',
+        message: '新備份已建立，但無法清理部分舊備份。',
+        occurredAt: '2026-07-28T10:00:00.000Z',
+      },
+      statusWarning: {
+        code: 'BACKUP_STATUS_UPDATE_FAILURE',
+        message: '備份檔已建立，但無法更新備份狀態紀錄。',
+        occurredAt: '2026-07-28T10:00:00.000Z',
+      },
+    };
+  }
   return {
     getBootstrapStatus: async () => ({
       appName: 'FinanceHub',
@@ -99,6 +153,57 @@ function createApi(
       storagePolicy: 'sample-data-only',
     }),
     unlockDatabase: async (password) => security.unlock(password),
+    backups: {
+      getStatus: async () => backupStatus,
+      waitForCurrentBackup: async () => {
+        if (backupScenario === 'running') {
+          await new Promise<void>((resolve) => {
+            window.addEventListener(
+              'financehub-test-backup-complete',
+              () => resolve(),
+              { once: true },
+            );
+          });
+        }
+        backupStatus = {
+          ...backupStatus,
+          isRunning: false,
+          validBackupCount: Math.max(1, backupStatus.validBackupCount),
+          lastSuccessfulAt: NOW,
+        };
+        return backupStatus;
+      },
+      createNow: async () => {
+        if (backupScenario === 'failure') {
+          throw { code: 'BACKUP_IO_FAILURE' };
+        }
+        backupStatus = {
+          ...backupStatus,
+          validBackupCount: backupScenario === 'capacity'
+            ? backupStatus.validBackupCount
+            : backupStatus.validBackupCount + 1,
+          lastSuccessfulAt: NOW,
+        };
+        return backupStatus;
+      },
+      setAutomaticEnabled: async (enabled) => {
+        backupStatus = { ...backupStatus, automaticEnabled: enabled };
+        return backupStatus;
+      },
+      setRetentionCount: async (retentionCount, confirmRemoval = false) => {
+        backupStatus = {
+          ...backupStatus,
+          retentionCount,
+          validBackupCount:
+            confirmRemoval && backupStatus.validBackupCount > retentionCount
+              ? retentionCount
+              : backupStatus.validBackupCount,
+        };
+        return backupStatus;
+      },
+      openDirectory: async () => undefined,
+      exportLatest: async () => 'exported',
+    },
     financialItems: {
       list: async () => financialItemSnapshot(state),
       create: async (draft) => {

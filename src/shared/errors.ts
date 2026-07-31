@@ -20,6 +20,16 @@ export const ERROR_CODES = {
   databaseUnreadable: 'DATABASE_UNREADABLE',
   databaseLocked: 'DATABASE_LOCKED',
   databaseAlreadyUnlocked: 'DATABASE_ALREADY_UNLOCKED',
+  backupInProgress: 'BACKUP_IN_PROGRESS',
+  backupWriteQueueFull: 'BACKUP_WRITE_QUEUE_FULL',
+  backupCheckpointBusy: 'BACKUP_CHECKPOINT_BUSY',
+  backupSourceInvalid: 'BACKUP_SOURCE_INVALID',
+  backupFormatInvalid: 'BACKUP_FORMAT_INVALID',
+  backupIoFailure: 'BACKUP_IO_FAILURE',
+  backupExportUnavailable: 'BACKUP_EXPORT_UNAVAILABLE',
+  backupExportFailure: 'BACKUP_EXPORT_FAILURE',
+  backupStatusUpdateFailure: 'BACKUP_STATUS_UPDATE_FAILURE',
+  backupCleanupFailure: 'BACKUP_CLEANUP_FAILURE',
 } as const;
 
 export type ErrorCode =
