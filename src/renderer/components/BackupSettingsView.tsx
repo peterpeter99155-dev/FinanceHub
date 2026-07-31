@@ -2,6 +2,15 @@ import { useEffect, useState } from 'react';
 
 import type { BackupStatus } from '../../shared/backups';
 import { backupErrorMessage } from '../messages';
+import {
+  backupHeadline,
+  formatBackupTime,
+} from '../backupViewModel';
+import {
+  BackupStatusFeedback,
+  type BackupFeedback,
+} from './BackupStatusFeedback';
+import { BackupSettingsHeading } from './BackupSettingsHeading';
 import { BackupHelpDialog } from './BackupHelpDialog';
 
 type BackupAction =
@@ -16,15 +25,14 @@ export function BackupSettingsView() {
   const [status, setStatus] = useState<BackupStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState<BackupAction | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<BackupFeedback | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
 
   useEffect(() => {
-    if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(null), 2400);
+    if (feedback?.tone !== 'success') return;
+    const timer = window.setTimeout(() => setFeedback(null), 3000);
     return () => window.clearTimeout(timer);
-  }, [notice]);
+  }, [feedback]);
 
   useEffect(() => {
     let active = true;
@@ -34,7 +42,12 @@ export function BackupSettingsView() {
         if (active) setStatus(value);
       })
       .catch((caught: unknown) => {
-        if (active) setError(backupErrorMessage(caught));
+        if (active) {
+          setFeedback({
+            tone: 'error',
+            message: backupErrorMessage(caught),
+          });
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -53,7 +66,12 @@ export function BackupSettingsView() {
         if (active) setStatus(value);
       })
       .catch((caught: unknown) => {
-        if (active) setError(backupErrorMessage(caught));
+        if (active) {
+          setFeedback({
+            tone: 'error',
+            message: backupErrorMessage(caught),
+          });
+        }
       });
     return () => {
       active = false;
@@ -67,15 +85,20 @@ export function BackupSettingsView() {
   ) {
     if (action) return;
     setAction(kind);
-    setError(null);
+    setFeedback(null);
     try {
       const result = await operation();
       setStatus(
         result ?? await window.financeHub.backups.getStatus(),
       );
-      if (successMessage) setNotice(successMessage);
+      if (successMessage) {
+        setFeedback({ tone: 'success', message: successMessage });
+      }
     } catch (caught) {
-      setError(backupErrorMessage(caught));
+      setFeedback({
+        tone: 'error',
+        message: backupErrorMessage(caught),
+      });
     } finally {
       setAction(null);
     }
@@ -84,14 +107,17 @@ export function BackupSettingsView() {
   async function exportLatest() {
     if (action) return;
     setAction('export');
-    setError(null);
+    setFeedback(null);
     try {
       const result = await window.financeHub.backups.exportLatest();
       if (result === 'exported') {
-        setNotice('最新備份已匯出');
+        setFeedback({ tone: 'success', message: '最新備份已匯出' });
       }
     } catch (caught) {
-      setError(backupErrorMessage(caught));
+      setFeedback({
+        tone: 'error',
+        message: backupErrorMessage(caught),
+      });
     } finally {
       setAction(null);
     }
@@ -109,7 +135,7 @@ export function BackupSettingsView() {
     return (
       <section className="panel backup-panel state-panel error-state">
         <h2>無法讀取備份狀態</h2>
-        <p>{error}</p>
+        <p>{feedback?.message}</p>
       </section>
     );
   }
@@ -117,43 +143,20 @@ export function BackupSettingsView() {
   const backingUp = status.isRunning || action === 'backup';
   return (
     <section className="backup-workspace" aria-labelledby="backup-title">
-      <div className="section-heading backup-heading">
-        <div className="backup-title-row">
-          <div>
-            <p className="label">本機資料保護</p>
-            <h2 id="backup-title">資料與備份</h2>
-          </div>
-          <button
-            aria-label="查看備份說明"
-            className="backup-help-button"
-            type="button"
-            onClick={() => setHelpOpen(true)}
-          >
-            ?
-          </button>
-        </div>
-        <div className="backup-heading-actions">
-          <button
-            className="secondary-button"
-            disabled={Boolean(action)}
-            type="button"
-            onClick={() => void exportLatest()}
-          >
-            {action === 'export' ? '正在匯出…' : '匯出最新備份'}
-          </button>
-          <button
-            className="secondary-button"
-            disabled={Boolean(action)}
-            type="button"
-            onClick={() =>
-              void run('folder', () =>
-                window.financeHub.backups.openDirectory(),
-              )
-            }
-          >
-            開啟備份資料夾
-          </button>
-        </div>
+      <BackupSettingsHeading
+        disabled={Boolean(action)}
+        exporting={action === 'export'}
+        onExport={() => void exportLatest()}
+        onHelp={() => setHelpOpen(true)}
+        onOpenDirectory={() =>
+          void run('folder', () =>
+            window.financeHub.backups.openDirectory(),
+          )
+        }
+      />
+
+      <div className="backup-feedback-slot">
+        {feedback && <BackupStatusFeedback feedback={feedback} />}
       </div>
 
       <div className="backup-grid">
@@ -181,8 +184,10 @@ export function BackupSettingsView() {
               disabled={Boolean(action) || backingUp}
               type="button"
               onClick={() =>
-                void run('backup', () =>
-                  window.financeHub.backups.createNow(),
+                void run(
+                  'backup',
+                  () => window.financeHub.backups.createNow(),
+                  '備份已完成',
                 )
               }
             >
@@ -270,30 +275,9 @@ export function BackupSettingsView() {
           {status.statusWarning.message}
         </p>
       )}
-      {error && (
-        <p className="backup-message error-state" role="alert">{error}</p>
-      )}
-      {notice && (
-        <div className="toast-notification" role="status">{notice}</div>
-      )}
       {helpOpen && (
         <BackupHelpDialog onClose={() => setHelpOpen(false)} />
       )}
     </section>
   );
-}
-
-function backupHeadline(status: BackupStatus): string {
-  if (status.lastError) return '最近一次備份未完成';
-  if (status.lastSuccessfulAt) return '備份狀態正常';
-  return '尚未建立備份';
-}
-
-function formatBackupTime(value: string | undefined): string {
-  if (!value) return '尚無紀錄';
-  return new Intl.DateTimeFormat('zh-TW', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: 'Asia/Taipei',
-  }).format(new Date(value));
 }

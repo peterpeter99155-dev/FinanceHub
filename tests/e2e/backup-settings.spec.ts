@@ -20,6 +20,9 @@ test('shows backup state and updates manual backup settings', async ({
   ).toBeVisible();
 
   await page.getByTestId('backup-now').click();
+  const successFeedback = page.getByText('備份已完成');
+  await expect(successFeedback).toBeVisible();
+  await expect(successFeedback).toHaveClass(/success/);
   await expect(page.getByText('備份狀態正常')).toBeVisible();
   await expect(page.getByText('1 份')).toBeVisible();
 
@@ -36,9 +39,9 @@ test('shows backup state and updates manual backup settings', async ({
   await expect(page.getByText('備份狀態已更新')).toBeVisible();
 
   await page.getByRole('button', { name: '查看備份說明' }).click();
-  await expect(
-    page.getByRole('heading', { name: '如何保護 FinanceHub 資料' }),
-  ).toBeVisible();
+  const helpDialog = page.getByRole('dialog');
+  await expect(helpDialog).toBeVisible();
+  await expect(helpDialog).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect(
     page.getByText(/資料庫、metadata 與 manifest 三個檔案/),
   ).toBeVisible();
@@ -46,6 +49,25 @@ test('shows backup state and updates manual backup settings', async ({
 
   await page.getByRole('button', { name: '匯出最新備份' }).click();
   await expect(page.getByText('最新備份已匯出')).toBeVisible();
+});
+
+test('shows failed backup feedback below the page heading', async ({
+  page,
+}) => {
+  await page.goto('/?backup=failure');
+  await page.getByRole('button', { name: '資料與備份' }).click();
+  await page.getByTestId('backup-now').click();
+
+  const feedback = page.getByText(
+    '無法存取備份資料夾，請稍後再試。',
+  );
+  await expect(feedback).toBeVisible();
+  await expect(feedback).toHaveClass(/error/);
+  const [headingBox, feedbackBox] = await Promise.all([
+    page.getByRole('heading', { name: '資料與備份' }).boundingBox(),
+    feedback.boundingBox(),
+  ]);
+  expect(feedbackBox!.y).toBeGreaterThan(headingBox!.y);
 });
 
 test('manual status choices exclude system-only states', async ({ page }) => {

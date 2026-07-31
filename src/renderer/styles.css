@@ -680,10 +680,14 @@ form label > small {
 }
 
 .backup-help-dialog {
+  isolation: isolate;
   width: min(620px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);
   padding: 28px;
   overflow-y: auto;
+  border-color: #cfd8d2;
+  background: #fff;
+  box-shadow: 0 28px 90px rgb(16 28 21 / 32%);
 }
 
 .backup-help-list {
@@ -693,6 +697,59 @@ form label > small {
   gap: 12px;
   color: #405149;
   line-height: 1.65;
+}
+
+.backup-feedback-slot {
+  display: flex;
+  min-height: 58px;
+  align-items: flex-start;
+}
+
+.backup-feedback {
+  display: flex;
+  min-height: 46px;
+  padding: 11px 15px;
+  border: 1px solid;
+  border-radius: 12px;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  font-weight: 750;
+  line-height: 1.5;
+  box-shadow: 0 10px 30px rgb(36 56 45 / 10%);
+  animation: toast-enter 160ms ease-out;
+}
+
+.backup-feedback > span {
+  display: grid;
+  width: 23px;
+  height: 23px;
+  flex: 0 0 23px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.95rem;
+  line-height: 1;
+  place-items: center;
+}
+
+.backup-feedback.success {
+  border-color: #abd3b9;
+  color: #176138;
+  background: #edf9f1;
+}
+
+.backup-feedback.success > span {
+  background: #278a4f;
+}
+
+.backup-feedback.error {
+  border-color: #e2b0ac;
+  color: #9b302d;
+  background: #fff1f0;
+}
+
+.backup-feedback.error > span {
+  background: #c44741;
 }
 
 .backup-grid {

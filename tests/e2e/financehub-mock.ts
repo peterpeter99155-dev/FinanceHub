@@ -157,6 +157,9 @@ function createApi(
         return backupStatus;
       },
       createNow: async () => {
+        if (backupScenario === 'failure') {
+          throw { code: 'BACKUP_IO_FAILURE' };
+        }
         backupStatus = {
           ...backupStatus,
           validBackupCount: backupStatus.validBackupCount + 1,
