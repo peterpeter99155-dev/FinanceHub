@@ -31,6 +31,21 @@ test('shows backup state and updates manual backup settings', async ({
   await expect(
     page.getByLabel('保留最近幾份成功備份'),
   ).toHaveValue('14');
+
+  await page.getByRole('button', { name: '重新整理狀態' }).click();
+  await expect(page.getByText('備份狀態已更新')).toBeVisible();
+
+  await page.getByRole('button', { name: '查看備份說明' }).click();
+  await expect(
+    page.getByRole('heading', { name: '如何保護 FinanceHub 資料' }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/資料庫、metadata 與 manifest 三個檔案/),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '我知道了' }).click();
+
+  await page.getByRole('button', { name: '匯出最新備份' }).click();
+  await expect(page.getByText('最新備份已匯出')).toBeVisible();
 });
 
 test('manual status choices exclude system-only states', async ({ page }) => {

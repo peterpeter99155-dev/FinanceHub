@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   ipcMain,
   shell,
 } from 'electron';
@@ -72,6 +73,14 @@ void app.whenReady().then(() => {
           '無法開啟備份資料夾。',
         );
       }
+    },
+    async () => {
+      const selection = await dialog.showOpenDialog({
+        title: '選擇匯出備份的位置',
+        buttonLabel: '匯出到這裡',
+        properties: ['openDirectory', 'createDirectory'],
+      });
+      return selection.canceled ? undefined : selection.filePaths[0];
     },
   );
   controller.registerLockedHandlers();

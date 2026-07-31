@@ -15,6 +15,7 @@ export interface BackupExecutor {
   createBackup(): Promise<BackupExecution>;
   inspectInventory(): Promise<BackupInventory>;
   pruneBackups(retentionCount: 3 | 7 | 14 | 30): Promise<void>;
+  exportLatest(destinationRoot: string): Promise<void>;
 }
 
 export interface BackupSettings {

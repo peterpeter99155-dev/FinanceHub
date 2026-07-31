@@ -26,6 +26,8 @@ export const ERROR_CODES = {
   backupSourceInvalid: 'BACKUP_SOURCE_INVALID',
   backupFormatInvalid: 'BACKUP_FORMAT_INVALID',
   backupIoFailure: 'BACKUP_IO_FAILURE',
+  backupExportUnavailable: 'BACKUP_EXPORT_UNAVAILABLE',
+  backupExportFailure: 'BACKUP_EXPORT_FAILURE',
   backupStatusUpdateFailure: 'BACKUP_STATUS_UPDATE_FAILURE',
   backupCleanupFailure: 'BACKUP_CLEANUP_FAILURE',
 } as const;

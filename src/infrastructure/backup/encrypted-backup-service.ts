@@ -25,6 +25,7 @@ import {
   BACKUP_DATABASE_FILE,
   BACKUP_MANIFEST_FILE,
   BACKUP_METADATA_FILE,
+  backupDirectoryMatches,
   backupDirectoryName,
   createBackupId,
   creatingDirectoryName,
@@ -88,6 +89,57 @@ export class EncryptedBackupService implements BackupExecutor {
     };
   }
 
+  async exportLatest(destinationRoot: string): Promise<void> {
+    const backups = await this.validBackups();
+    const latest = backups.at(-1);
+    if (!latest) {
+      throw new FinanceHubError(
+        ERROR_CODES.backupExportUnavailable,
+        '目前沒有可匯出的有效備份。',
+      );
+    }
+    const rootInfo = await lstat(destinationRoot).catch(() => undefined);
+    if (
+      !rootInfo?.isDirectory() ||
+      rootInfo.isSymbolicLink()
+    ) {
+      throw backupExportFailure();
+    }
+
+    const exportDirectory = path.join(
+      destinationRoot,
+      path.basename(latest.directory),
+    );
+    let exportDirectoryCreated = false;
+    try {
+      await mkdir(exportDirectory, { recursive: false });
+      exportDirectoryCreated = true;
+      for (const file of [
+        BACKUP_DATABASE_FILE,
+        BACKUP_METADATA_FILE,
+        BACKUP_MANIFEST_FILE,
+      ]) {
+        await copyAndSync(
+          path.join(latest.directory, file),
+          path.join(exportDirectory, file),
+        );
+      }
+      const exported = await validateBackupDirectory(exportDirectory);
+      if (!sameManifest(exported, latest.manifest)) {
+        throw new Error('exported backup identity mismatch');
+      }
+    } catch (error) {
+      if (exportDirectoryCreated) {
+        await removeOwnedTemporaryDirectory(
+          destinationRoot,
+          exportDirectory,
+        ).catch(() => undefined);
+      }
+      if (error instanceof FinanceHubError) throw error;
+      throw backupExportFailure();
+    }
+  }
+
   async pruneBackups(retentionCount: 3 | 7 | 14 | 30): Promise<void> {
     const backups = await this.validBackups();
     const expired = backups.slice(0, Math.max(0, backups.length - retentionCount));
@@ -114,14 +166,13 @@ export class EncryptedBackupService implements BackupExecutor {
     for (const entry of await readdir(this.backupDirectory, {
       withFileTypes: true,
     })) {
-      if (!/^backup-[0-9a-f-]{36}$/i.test(entry.name) ||
-          !entry.isDirectory() || entry.isSymbolicLink()) {
+      if (!entry.isDirectory() || entry.isSymbolicLink()) {
         continue;
       }
       try {
         const directory = path.join(this.backupDirectory, entry.name);
         const manifest = await validateBackupDirectory(directory);
-        if (backupDirectoryName(manifest.backupId) !== entry.name) continue;
+        if (!backupDirectoryMatches(entry.name, manifest)) continue;
         backups.push({ directory, manifest });
       } catch {
         // Invalid or unknown directories are not counted and are never deleted.
@@ -163,10 +214,6 @@ export class EncryptedBackupService implements BackupExecutor {
     const temporaryDirectory = path.join(
       this.backupDirectory,
       creatingDirectoryName(backupId),
-    );
-    const completedDirectory = path.join(
-      this.backupDirectory,
-      backupDirectoryName(backupId),
     );
     const createdAt = this.now().toISOString();
 
@@ -216,6 +263,10 @@ export class EncryptedBackupService implements BackupExecutor {
       );
       await syncFile(manifestPath);
       await validateBackupDirectory(temporaryDirectory);
+      const completedDirectory = path.join(
+        this.backupDirectory,
+        backupDirectoryName(backupId, manifest.completedAt),
+      );
       await rename(temporaryDirectory, completedDirectory);
       return manifest;
     } catch (error) {
@@ -238,6 +289,13 @@ function backupIoFailure(): FinanceHubError {
   return new FinanceHubError(
     ERROR_CODES.backupIoFailure,
     '建立備份時發生檔案系統錯誤。',
+  );
+}
+
+function backupExportFailure(): FinanceHubError {
+  return new FinanceHubError(
+    ERROR_CODES.backupExportFailure,
+    '匯出備份時發生檔案系統錯誤。',
   );
 }
 
@@ -309,7 +367,7 @@ async function quarantineAndDeleteBackup(
   const manifest = await validateBackupDirectory(candidate);
   if (
     manifest.backupId !== expectedManifest.backupId ||
-    backupDirectoryName(manifest.backupId) !== path.basename(candidate)
+    !backupDirectoryMatches(path.basename(candidate), manifest)
   ) {
     throw new Error('backup changed before cleanup');
   }

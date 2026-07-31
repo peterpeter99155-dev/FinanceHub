@@ -182,7 +182,7 @@ function assertValidBackupDirectories(backupsDirectory) {
     const manifest = JSON.parse(
       readFileSync(path.join(directory, 'manifest.json'), 'utf8'),
     );
-    assert(manifest.backupId === name.slice('backup-'.length), 'ID mismatch.');
+    assert(name.endsWith(manifest.backupId), 'ID mismatch.');
   }
 }
 
@@ -271,7 +271,11 @@ async function verifyLiveFileRejection(backupDirectory, missing) {
 
 function backupDirectories(root) {
   return readdirSync(root)
-    .filter((name) => /^backup-[0-9a-f-]{36}$/i.test(name))
+    .filter((name) =>
+      /^backup-[0-9a-f-]{36}$/i.test(name) ||
+      /^FinanceHub-backup-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-[0-9a-f-]{36}$/i
+        .test(name),
+    )
     .sort();
 }
 

@@ -103,6 +103,19 @@ export class BackupService {
     return this.getStatus();
   }
 
+  async exportLatest(destinationRoot: unknown): Promise<void> {
+    if (this.running) {
+      throw new FinanceHubError(
+        ERROR_CODES.backupInProgress,
+        '已有備份正在進行。',
+      );
+    }
+    if (typeof destinationRoot !== 'string' || !destinationRoot) {
+      throw invalidBackupSetting();
+    }
+    await this.executor.exportLatest(destinationRoot);
+  }
+
   private async createBackup(): Promise<void> {
     if (this.running) {
       throw new FinanceHubError(

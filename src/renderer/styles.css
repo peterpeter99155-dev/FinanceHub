@@ -660,6 +660,41 @@ form label > small {
   align-items: center;
 }
 
+.backup-title-row,
+.backup-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.backup-help-button {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #b8c7be;
+  border-radius: 50%;
+  color: #315d46;
+  background: #fff;
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.backup-help-dialog {
+  width: min(620px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  padding: 28px;
+  overflow-y: auto;
+}
+
+.backup-help-list {
+  display: grid;
+  margin: 24px 0;
+  padding-left: 24px;
+  gap: 12px;
+  color: #405149;
+  line-height: 1.65;
+}
+
 .backup-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
@@ -1639,6 +1674,11 @@ form label > small,
 
   .backup-heading {
     align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .backup-heading-actions {
+    align-items: stretch;
     flex-direction: column;
   }
 

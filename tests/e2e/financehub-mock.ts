@@ -173,6 +173,7 @@ function createApi(
         return backupStatus;
       },
       openDirectory: async () => undefined,
+      exportLatest: async () => 'exported',
     },
     financialItems: {
       list: async () => financialItemSnapshot(state),

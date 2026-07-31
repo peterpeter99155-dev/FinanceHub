@@ -48,6 +48,7 @@ type ServiceFactory = (
 ) => FinancialServices;
 
 type DirectoryOpener = (directory: string) => Promise<void>;
+type ExportDirectorySelector = () => Promise<string | undefined>;
 
 export class ApplicationController {
   private connection: BootstrapDatabase | undefined;
@@ -63,6 +64,8 @@ export class ApplicationController {
       createFinancialServices,
     private readonly applicationVersion = '0.1.0',
     private readonly openDirectory: DirectoryOpener =
+      async () => undefined,
+    private readonly selectExportDirectory: ExportDirectorySelector =
       async () => undefined,
   ) {}
 
@@ -141,6 +144,12 @@ export class ApplicationController {
         writeGate,
         backups,
         () => this.openDirectory(backupExecutor.backupDirectory),
+        async () => {
+          const destination = await this.selectExportDirectory();
+          if (!destination) return 'cancelled';
+          await backups.exportLatest(destination);
+          return 'exported';
+        },
       );
       this.connection = connection;
       this.writeGate = writeGate;
@@ -213,6 +222,7 @@ function registerFinancialHandlers(
   writeGate: DatabaseWriteGate,
   backups: BackupService,
   openBackupDirectory: () => Promise<void>,
+  exportLatestBackup: () => Promise<'exported' | 'cancelled'>,
 ): void {
   registry.handle(IPC_CHANNELS.listFinancialItems, () =>
     services.financialItems.list(),
@@ -336,5 +346,9 @@ function registerFinancialHandlers(
   registry.handle(
     IPC_CHANNELS.openBackupDirectory,
     openBackupDirectory,
+  );
+  registry.handle(
+    IPC_CHANNELS.exportLatestBackup,
+    exportLatestBackup,
   );
 }

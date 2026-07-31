@@ -1074,3 +1074,26 @@ best-effort 清零。
 - Migration 4 同時包含 schema 變更與預設分類寫入，為技術架構規範建立前的歷史例外，保留原狀，不得修改或拆解。
 - Migration 5 與 Migration 4 的預設分類 `INSERT` 內容相同；它是因舊版介面曾允許刪除預設分類而建立的資料修復 migration，保留原狀。
 - 已套用的 migration 不得修改，只能新增。此規則正式生效；範圍以 `00_Architecture_Rules.md` 第 5 節為準。
+
+---
+
+## DEC-035 可讀備份名稱、完整匯出與還原延後
+
+- 日期：2026-07-31
+- 狀態：已確認
+
+### 決議
+
+1. 新建立的備份目錄使用
+   `FinanceHub-backup-YYYY-MM-DD_HH-mm-ss-<UUID>`，日期時間以
+   `Asia/Taipei` 顯示，UUID 仍負責唯一性。既有
+   `backup-<UUID>` 備份必須繼續可辨識、驗證與保留。
+2. 目錄內的 `financehub.db`、`financehub.db.metadata.json` 與
+   `manifest.json` 不改名，manifest v1 也不因此改版。
+3. 「匯出最新備份」只能匯出最新一份通過既有格式與 SHA-256
+   驗證的完整三件式備份。renderer 只能發出窄 IPC 意圖；資料夾
+   選擇、檔案複製與匯出後驗證都在 main／infrastructure 完成。
+4. 不以「開啟正式資料位置並讓使用者自行複製」作為主要備份流程，
+   避免程式運作期間複製到不一致的 DB／WAL 狀態。
+5. 一鍵還原不在本次調整實作，列入後續 Sprint。未來還原仍須遵守
+   Sprint 04 Review 第 12 節的相容性與安全承諾。

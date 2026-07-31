@@ -183,6 +183,10 @@ const financeHubApi: FinanceHubApi = Object.freeze({
       ),
     openDirectory: () =>
       invoke<void>(IPC_CHANNELS.openBackupDirectory),
+    exportLatest: () =>
+      invoke<'exported' | 'cancelled'>(
+        IPC_CHANNELS.exportLatestBackup,
+      ),
   }),
 });
 

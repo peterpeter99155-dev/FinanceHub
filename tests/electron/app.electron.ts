@@ -263,7 +263,9 @@ test('completes the Sprint 01 net-worth flow and persists data', async () => {
     await expect(page.getByText('備份狀態正常')).toBeVisible();
     expect(
       readdirSync(path.join(userDataDirectory, 'backups')).filter(
-        (entry) => entry.startsWith('backup-'),
+        (entry) =>
+          entry.startsWith('backup-') ||
+          entry.startsWith('FinanceHub-backup-'),
       ).length,
     ).toBe(countBefore + 1);
   } finally {

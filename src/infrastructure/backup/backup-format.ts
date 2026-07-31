@@ -35,12 +35,46 @@ export function createBackupId(): string {
   return randomUUID();
 }
 
-export function backupDirectoryName(backupId: string): string {
-  return `backup-${backupId}`;
+export function backupDirectoryName(
+  backupId: string,
+  completedAt?: string,
+): string {
+  if (!completedAt) return `backup-${backupId}`;
+  return `FinanceHub-backup-${readableTimestamp(completedAt)}-${backupId}`;
 }
 
 export function creatingDirectoryName(backupId: string): string {
   return `.creating-${backupId}`;
+}
+
+export function backupDirectoryMatches(
+  directoryName: string,
+  manifest: BackupManifestV1,
+): boolean {
+  const escapedId = manifest.backupId.replaceAll('-', '\\-');
+  return directoryName === backupDirectoryName(manifest.backupId) ||
+    new RegExp(
+      `^FinanceHub-backup-\\d{4}-\\d{2}-\\d{2}_` +
+      `\\d{2}-\\d{2}-\\d{2}-${escapedId}$`,
+      'i',
+    ).test(directoryName);
+}
+
+function readableTimestamp(value: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(value));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((entry) => entry.type === type)?.value ?? '00';
+  return `${part('year')}-${part('month')}-${part('day')}_` +
+    `${part('hour')}-${part('minute')}-${part('second')}`;
 }
 
 export async function describeBackupFile(

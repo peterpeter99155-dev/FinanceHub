@@ -11,6 +11,20 @@ import type {
 import { ERROR_CODES, FinanceHubError } from '../../src/shared/errors';
 
 describe('BackupService', () => {
+  it('delegates latest backup export to the backup executor', async () => {
+    const executor = new FakeExecutor();
+    const service = new BackupService(
+      executor,
+      new MemorySettings(),
+      fixedClock(),
+      immediateWrites(),
+    );
+
+    await service.exportLatest('D:\\FinanceHub exports');
+
+    expect(executor.exportedTo).toBe('D:\\FinanceHub exports');
+  });
+
   it('rebuilds successful time and count from inventory, not settings', async () => {
     const settings = new MemorySettings();
     const executor = new FakeExecutor();
@@ -231,6 +245,7 @@ class FakeExecutor implements BackupExecutor {
   createCount = 0;
   lastRetentionCount: number | undefined;
   pruneFailure: unknown;
+  exportedTo: string | undefined;
 
   async createBackup() {
     this.createCount += 1;
@@ -246,6 +261,10 @@ class FakeExecutor implements BackupExecutor {
   async pruneBackups(retentionCount: 3 | 7 | 14 | 30) {
     this.lastRetentionCount = retentionCount;
     if (this.pruneFailure) throw this.pruneFailure;
+  }
+
+  async exportLatest(destinationRoot: string) {
+    this.exportedTo = destinationRoot;
   }
 }
 

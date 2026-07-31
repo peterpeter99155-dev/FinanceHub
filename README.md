@@ -65,7 +65,8 @@ FinanceHub 解鎖後會依設定自動建立本機加密備份，也可在
 %APPDATA%\FinanceHub\backups\
 ```
 
-每個 `backup-<識別碼>` 目錄都是一個獨立版本，必須同時包含：
+每個 `FinanceHub-backup-<日期時間>-<識別碼>` 目錄都是一個獨立版本。
+舊版建立的 `backup-<識別碼>` 目錄仍可使用。每份備份必須同時包含：
 
 ```text
 financehub.db
@@ -82,7 +83,8 @@ manifest.json
 Sprint 04 尚未提供一鍵還原。需要手動還原時：
 
 1. **完全關閉 FinanceHub。** 請確認程式已完全結束。
-2. 選擇一個完整的 `backup-<識別碼>` 目錄。確認 manifest 所列的
+2. 選擇一個完整的 `FinanceHub-backup-<日期時間>-<識別碼>` 目錄
+   （或舊版的 `backup-<識別碼>` 目錄）。確認 manifest 所列的
    `financehub.db` 與 `financehub.db.metadata.json` 檔名、大小及
    SHA-256 都與實際檔案相同。Windows 可使用
    `Get-FileHash <檔案路徑> -Algorithm SHA256` 比對雜湊。

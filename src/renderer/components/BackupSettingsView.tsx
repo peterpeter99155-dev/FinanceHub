@@ -2,19 +2,29 @@ import { useEffect, useState } from 'react';
 
 import type { BackupStatus } from '../../shared/backups';
 import { backupErrorMessage } from '../messages';
+import { BackupHelpDialog } from './BackupHelpDialog';
 
 type BackupAction =
   | 'backup'
   | 'refresh'
   | 'automatic'
   | 'retention'
-  | 'folder';
+  | 'folder'
+  | 'export';
 
 export function BackupSettingsView() {
   const [status, setStatus] = useState<BackupStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState<BackupAction | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 2400);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   useEffect(() => {
     let active = true;
@@ -53,6 +63,7 @@ export function BackupSettingsView() {
   async function run(
     kind: BackupAction,
     operation: () => Promise<BackupStatus | void>,
+    successMessage?: string,
   ) {
     if (action) return;
     setAction(kind);
@@ -62,6 +73,23 @@ export function BackupSettingsView() {
       setStatus(
         result ?? await window.financeHub.backups.getStatus(),
       );
+      if (successMessage) setNotice(successMessage);
+    } catch (caught) {
+      setError(backupErrorMessage(caught));
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function exportLatest() {
+    if (action) return;
+    setAction('export');
+    setError(null);
+    try {
+      const result = await window.financeHub.backups.exportLatest();
+      if (result === 'exported') {
+        setNotice('最新備份已匯出');
+      }
     } catch (caught) {
       setError(backupErrorMessage(caught));
     } finally {
@@ -90,22 +118,42 @@ export function BackupSettingsView() {
   return (
     <section className="backup-workspace" aria-labelledby="backup-title">
       <div className="section-heading backup-heading">
-        <div>
-          <p className="label">本機資料保護</p>
-          <h2 id="backup-title">資料與備份</h2>
+        <div className="backup-title-row">
+          <div>
+            <p className="label">本機資料保護</p>
+            <h2 id="backup-title">資料與備份</h2>
+          </div>
+          <button
+            aria-label="查看備份說明"
+            className="backup-help-button"
+            type="button"
+            onClick={() => setHelpOpen(true)}
+          >
+            ?
+          </button>
         </div>
-        <button
-          className="secondary-button"
-          disabled={Boolean(action)}
-          type="button"
-          onClick={() =>
-            void run('folder', () =>
-              window.financeHub.backups.openDirectory(),
-            )
-          }
-        >
-          開啟備份資料夾
-        </button>
+        <div className="backup-heading-actions">
+          <button
+            className="secondary-button"
+            disabled={Boolean(action)}
+            type="button"
+            onClick={() => void exportLatest()}
+          >
+            {action === 'export' ? '正在匯出…' : '匯出最新備份'}
+          </button>
+          <button
+            className="secondary-button"
+            disabled={Boolean(action)}
+            type="button"
+            onClick={() =>
+              void run('folder', () =>
+                window.financeHub.backups.openDirectory(),
+              )
+            }
+          >
+            開啟備份資料夾
+          </button>
+        </div>
       </div>
 
       <div className="backup-grid">
@@ -145,8 +193,10 @@ export function BackupSettingsView() {
               disabled={Boolean(action)}
               type="button"
               onClick={() =>
-                void run('refresh', () =>
-                  window.financeHub.backups.getStatus(),
+                void run(
+                  'refresh',
+                  () => window.financeHub.backups.getStatus(),
+                  '備份狀態已更新',
                 )
               }
             >
@@ -222,6 +272,12 @@ export function BackupSettingsView() {
       )}
       {error && (
         <p className="backup-message error-state" role="alert">{error}</p>
+      )}
+      {notice && (
+        <div className="toast-notification" role="status">{notice}</div>
+      )}
+      {helpOpen && (
+        <BackupHelpDialog onClose={() => setHelpOpen(false)} />
       )}
     </section>
   );

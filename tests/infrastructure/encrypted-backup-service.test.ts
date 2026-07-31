@@ -75,7 +75,7 @@ describe('EncryptedBackupService', () => {
       new DatabaseWriteGate(),
     );
     const manifest = await service.createBackup();
-    const directory = path.join(backups, `backup-${manifest.backupId}`);
+    const directory = findBackupDirectory(backups, manifest.backupId)!;
     expect(await validateBackupDirectory(directory)).toEqual(manifest);
     expect(manifest.databaseSchemaVersion).toBe(6);
     expect(manifest.encryption).toEqual({ formatVersion: 1, kdfVersion: 1 });
@@ -235,7 +235,10 @@ describe('EncryptedBackupService', () => {
       () => backupId,
     );
     const first = await service.createBackup();
-    const firstDirectory = path.join(root, 'backups', `backup-${backupId}`);
+    const firstDirectory = findBackupDirectory(
+      path.join(root, 'backups'),
+      backupId,
+    )!;
     const firstManifest = readFileSync(path.join(firstDirectory, 'manifest.json'));
     await expect(service.createBackup()).rejects.toSatisfy(
       (error: unknown) => errorCodeOf(error) === ERROR_CODES.backupIoFailure,
@@ -243,6 +246,81 @@ describe('EncryptedBackupService', () => {
     expect(readFileSync(path.join(firstDirectory, 'manifest.json')))
       .toEqual(firstManifest);
     expect(first.backupId).toBe(backupId);
+    connection.close();
+  });
+
+  it('exports the latest validated backup as an exact verified triplet', async () => {
+    const root = temporaryRoot();
+    const databasePath = path.join(root, 'financehub.db');
+    const connection = await openOrCreateEncryptedDatabase(
+      databasePath,
+      PASSWORD,
+    );
+    const backups = path.join(root, 'backups');
+    const destination = path.join(root, 'exported');
+    mkdirSync(destination);
+    const service = new EncryptedBackupService(
+      connection.database,
+      databasePath,
+      backups,
+      'test',
+      new DatabaseWriteGate(),
+      () => new Date('2026-07-31T06:30:00.000Z'),
+      () => '45555555-5555-4555-8555-555555555555',
+    );
+    const manifest = await service.createBackup();
+
+    await service.exportLatest(destination);
+
+    const exported = path.join(
+      destination,
+      `FinanceHub-backup-2026-07-31_14-30-00-${manifest.backupId}`,
+    );
+    await expect(validateBackupDirectory(exported)).resolves.toEqual(
+      manifest,
+    );
+    expect(readdirSync(exported).sort()).toEqual([
+      'financehub.db',
+      'financehub.db.metadata.json',
+      'manifest.json',
+    ]);
+    connection.close();
+  });
+
+  it('never removes an existing destination when an export name collides', async () => {
+    const root = temporaryRoot();
+    const databasePath = path.join(root, 'financehub.db');
+    const connection = await openOrCreateEncryptedDatabase(
+      databasePath,
+      PASSWORD,
+    );
+    const backups = path.join(root, 'backups');
+    const destination = path.join(root, 'exported');
+    mkdirSync(destination);
+    const service = new EncryptedBackupService(
+      connection.database,
+      databasePath,
+      backups,
+      'test',
+      new DatabaseWriteGate(),
+      () => new Date('2026-07-31T06:30:00.000Z'),
+      () => '46666666-6666-4666-8666-666666666666',
+    );
+    const manifest = await service.createBackup();
+    const existing = path.join(
+      destination,
+      `FinanceHub-backup-2026-07-31_14-30-00-${manifest.backupId}`,
+    );
+    mkdirSync(existing);
+    writeFileSync(path.join(existing, 'keep.txt'), 'do not remove');
+
+    await expect(service.exportLatest(destination)).rejects.toMatchObject({
+      code: ERROR_CODES.backupExportFailure,
+    });
+
+    expect(readFileSync(path.join(existing, 'keep.txt'), 'utf8')).toBe(
+      'do not remove',
+    );
     connection.close();
   });
 
@@ -313,9 +391,9 @@ describe('EncryptedBackupService', () => {
 
     await service.pruneBackups(7);
 
-    expect(existsSync(path.join(backups, `backup-${ids[0]}`))).toBe(false);
+    expect(findBackupDirectory(backups, ids[0])).toBeUndefined();
     for (const id of ids.slice(1)) {
-      expect(existsSync(path.join(backups, `backup-${id}`))).toBe(true);
+      expect(findBackupDirectory(backups, id)).toBeDefined();
     }
     expect(existsSync(junction)).toBe(true);
     expect(existsSync(outside)).toBe(true);
@@ -354,7 +432,7 @@ describe('EncryptedBackupService', () => {
       code: ERROR_CODES.backupCleanupFailure,
     });
     for (const id of ids) {
-      expect(existsSync(path.join(backups, `backup-${id}`))).toBe(true);
+      expect(findBackupDirectory(backups, id)).toBeDefined();
     }
     connection.close();
   });
@@ -374,7 +452,7 @@ describe('EncryptedBackupService', () => {
     let timestamp = Date.parse('2026-07-01T00:00:00.000Z');
     const moveWithReplacement = async (source: string, target: string) => {
       const heldOriginal = path.join(backups, 'held-original');
-      const replacement = path.join(backups, `backup-${ids[3]}`);
+      const replacement = findBackupDirectory(backups, ids[3])!;
       renameSync(source, heldOriginal);
       renameSync(replacement, source);
       renameSync(source, target);
@@ -414,4 +492,24 @@ function temporaryRoot(): string {
   const root = mkdtempSync(path.join(tmpdir(), 'financehub-backup-test-'));
   roots.push(root);
   return root;
+}
+
+function findBackupDirectory(
+  root: string,
+  backupId: string,
+): string | undefined {
+  if (!existsSync(root)) return undefined;
+  return readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(root, entry.name))
+    .find((directory) => {
+      const manifestPath = path.join(directory, 'manifest.json');
+      if (!existsSync(manifestPath)) return false;
+      try {
+        return JSON.parse(readFileSync(manifestPath, 'utf8')).backupId ===
+          backupId;
+      } catch {
+        return false;
+      }
+    });
 }
