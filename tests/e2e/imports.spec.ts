@@ -55,3 +55,26 @@ test('沒有信用卡時可前往新增信用卡', async ({ page }) => {
   await page.getByRole('button', { name: '新增項目' }).click();
   await expect(page.getByText('虛構信用卡', { exact: true })).toBeVisible();
 });
+
+test('疑似重複與分類只提出建議並由使用者採用', async ({ page }) => {
+  await openImport(page, 'suggestions');
+  const first = page.getByTestId('import-candidate').first();
+  await expect(first.getByTestId('duplicate-suggestion')).toContainText(
+    '不會自動合併或刪除',
+  );
+  await expect(first.getByTestId('category-suggestion')).toContainText(
+    '建議分類：飲食',
+  );
+  await expect(first.getByLabel('支出分類')).toHaveValue(
+    'expense-uncategorized',
+  );
+  await first.getByLabel('支出分類').selectOption('expense-other');
+  await expect(first.getByLabel('支出分類')).toHaveValue('expense-other');
+  await first.getByRole('button', { name: '採用建議' }).click();
+  await expect(first.getByLabel('支出分類')).toHaveValue('expense-food');
+  await first.getByRole('button', { name: /比較並連結/ }).click();
+  await expect(first.getByLabel('連結既有交易')).toBeChecked();
+  await expect(first.getByTestId('existing-transaction')).toHaveValue(
+    'existing-card-transaction',
+  );
+});

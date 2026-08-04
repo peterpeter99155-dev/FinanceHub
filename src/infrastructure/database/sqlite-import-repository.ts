@@ -58,6 +58,12 @@ interface ObservationRow {
   warning_codes: string;
 }
 
+interface SourceLinkRow {
+  observation_id: string;
+  transaction_id: string;
+  linked_at: string;
+}
+
 export class SqliteImportRepository implements ImportRepository {
   constructor(private readonly database: SqliteDatabase) {}
 
@@ -148,6 +154,41 @@ export class SqliteImportRepository implements ImportRepository {
 
   findBatchBySourceFileDigest(digest: string): ImportBatch | undefined {
     return this.findBatch('source_file_digest', digest);
+  }
+
+  findObservationsByFingerprint(
+    fingerprint: string,
+  ): readonly SourceObservation[] {
+    const rows = this.database
+      .prepare(`
+        SELECT id, batch_id, observation_fingerprint, kind, amount,
+               statement_effect, occurred_at, occurred_at_precision,
+               summary, page_number, anonymous_row_locator, warning_codes
+        FROM source_observations
+        WHERE observation_fingerprint = ?
+        ORDER BY id
+      `)
+      .all(fingerprint) as unknown as ObservationRow[];
+    return rows.map(mapObservation);
+  }
+
+  findSourceLinkByObservationId(
+    observationId: string,
+  ): TransactionSourceLink | undefined {
+    const row = this.database
+      .prepare(`
+        SELECT observation_id, transaction_id, linked_at
+        FROM transaction_source_links
+        WHERE observation_id = ?
+      `)
+      .get(observationId) as unknown as SourceLinkRow | undefined;
+    return row
+      ? {
+          observationId: row.observation_id,
+          transactionId: row.transaction_id,
+          linkedAt: row.linked_at,
+        }
+      : undefined;
   }
 
   listCandidates(batchId: string): readonly ImportCandidate[] {

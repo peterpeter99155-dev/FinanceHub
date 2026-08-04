@@ -2,12 +2,14 @@ import type { FinancialCategory } from '../../domain/category';
 import type { FinancialItem } from '../../domain/financial-item';
 import type { ImportCandidate, SourceObservation } from '../../domain/import';
 import type { FinancialTransaction } from '../../domain/transaction';
+import type { ImportCandidateInsight } from '../../application/import-service';
 import { IMPORT_WARNING_LABELS, type ImportCandidateDraft } from '../importViewModel';
 import { ImportLinkComparison } from './ImportLinkComparison';
 
 interface Props {
   readonly candidate: ImportCandidate;
   readonly observation?: SourceObservation;
+  readonly insight?: ImportCandidateInsight;
   readonly draft: ImportCandidateDraft;
   readonly cards: readonly FinancialItem[];
   readonly categories: readonly FinancialCategory[];
@@ -23,6 +25,8 @@ export function ImportCandidateCard(props: Props) {
     <article className={`import-candidate ${resolved ? 'resolved' : ''}`} data-testid="import-candidate">
       <header><div><span className="label">交易日期</span><strong>{props.draft.date}・時間未知</strong></div>{resolved && <span className="status-chip">已處理：{decisionLabel(props.candidate.decision!)}</span>}</header>
       {props.observation?.warningCodes.map((code) => <p className="import-warning" key={code}>! {IMPORT_WARNING_LABELS[code] ?? '這筆資料需要人工檢查。'}</p>)}
+      {props.insight && (props.insight.duplicateObservationCount > 0 || props.insight.matches.length > 0) && <div className="import-suggestion" data-testid="duplicate-suggestion"><strong>可能已經記錄過</strong><p>找到相同來源觀察或欄位相符的既有交易。請自行確認，不會自動合併或刪除。</p>{props.insight.matches.map(({ transaction }) => <button key={transaction.id} type="button" disabled={resolved} onClick={() => props.onChange({ decision: 'link_existing', existingTransactionId: transaction.id })}>比較並連結：{transaction.name}</button>)}</div>}
+      {props.insight?.categorySuggestion && <div className="import-suggestion" data-testid="category-suggestion"><span>依 {props.insight.categorySuggestion.evidenceCount} 筆已確認交易，建議分類：{props.categories.find(({ id }) => id === props.insight?.categorySuggestion?.categoryId)?.name ?? '未知分類'}</span><button type="button" disabled={resolved} onClick={() => props.onChange({ categoryId: props.insight!.categorySuggestion!.categoryId })}>採用建議</button></div>}
       <div className="import-edit-grid">
         <label>日期<input type="date" value={props.draft.date} disabled={resolved} onChange={(event) => props.onChange({ date: event.target.value })} /></label>
         <label>金額（TWD）<input inputMode="numeric" value={props.draft.amount} disabled={resolved} onChange={(event) => props.onChange({ amount: event.target.value.replace(/\D/g, '') })} /></label>

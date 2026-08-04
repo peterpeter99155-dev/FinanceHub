@@ -107,6 +107,15 @@ describe('SqliteImportRepository', () => {
         .prepare('SELECT COUNT(*) AS count FROM transaction_source_links')
         .get(),
     ).toEqual({ count: 2 });
+    const firstObservation = snapshot.observations[0];
+    expect(
+      imports.findObservationsByFingerprint(
+        firstObservation.observationFingerprint,
+      ),
+    ).toEqual([firstObservation]);
+    expect(
+      imports.findSourceLinkByObservationId(firstObservation.id),
+    ).toMatchObject({ observationId: firstObservation.id });
   });
 
   it('enforces create_new kind and amount requirements in SQLite', async () => {
@@ -137,6 +146,10 @@ describe('SqliteImportRepository', () => {
       findBatchById: imports.findBatchById.bind(imports),
       findBatchBySourceFileDigest:
         imports.findBatchBySourceFileDigest.bind(imports),
+      findObservationsByFingerprint:
+        imports.findObservationsByFingerprint.bind(imports),
+      findSourceLinkByObservationId:
+        imports.findSourceLinkByObservationId.bind(imports),
       listCandidates: imports.listCandidates.bind(imports),
       listObservations: imports.listObservations.bind(imports),
       findCandidateById: imports.findCandidateById.bind(imports),

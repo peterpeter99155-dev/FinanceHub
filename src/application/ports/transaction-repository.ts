@@ -18,6 +18,7 @@ export interface TransactionRepository {
     year: number,
     month: number,
   ): readonly FinancialTransaction[];
+  listAll(): readonly FinancialTransaction[];
   countByCategoryId(id: string): number;
   countByAccountId(id: string): number;
   reassignCategory(id: string, replacementId: string): void;

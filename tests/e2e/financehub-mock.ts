@@ -37,6 +37,7 @@ const BUILT_IN_CATEGORIES: readonly FinancialCategory[] = [
   category('expense-food', 'expense', '飲食'),
   category('expense-communication', 'expense', '通訊'),
   category('expense-other', 'expense', '其他'),
+  category('expense-uncategorized', 'expense', '暫未分類'),
 ];
 
 interface MutableState {
@@ -96,6 +97,28 @@ function createApi(
   if (importScenario !== null) state.items.push(creditCardItem());
   let importSnapshot = createImportSnapshot();
   if (importScenario === 'link') state.transactions.push(existingCardTransaction());
+  if (importScenario === 'suggestions') {
+    const transaction = existingCardTransaction();
+    state.transactions.push(transaction);
+    importSnapshot = {
+      ...importSnapshot,
+      insights: importSnapshot.insights.map((insight, index) =>
+        index === 0
+          ? {
+              ...insight,
+              duplicateObservationCount: 1,
+              matches: [
+                { transaction, reason: 'matching_transaction_fields' },
+              ],
+              categorySuggestion: {
+                categoryId: 'expense-food',
+                evidenceCount: 2,
+              },
+            }
+          : insight,
+      ),
+    };
+  }
   let backupStatus: BackupStatus = {
     automaticEnabled: true,
     dataDirectory: 'C:\\FinanceHub-Test-Data',
@@ -556,7 +579,7 @@ function createImportSnapshot(): ImportBatchSnapshot {
     { id: 'observation-2', batchId: 'batch-1', observationFingerprint: 'b'.repeat(64), amount: 100, statementEffect: -100, occurredAt: '2026-07-12T04:00:00.000Z', occurredAtPrecision: 'date', summary: '虛構扣抵', pageNumber: 2, anonymousRowLocator: 'page-2-row-2', warningCodes: [IMPORT_WARNING_CODES.negativeItemRequiresUserConfirmation] },
   ];
   const candidates: ImportCandidate[] = observations.map((item, index) => ({ id: `candidate-${index + 1}`, batchId: 'batch-1', observationId: item.id, kind: item.kind, amount: item.amount, occurredAt: item.occurredAt, occurredAtPrecision: item.occurredAtPrecision, name: item.summary, creditCardAccountId: 'card-1', updatedAt: NOW }));
-  return { batch: { id: 'batch-1', sourceType: 'sinopac-credit-card-statement-pdf', sourceFileDigest: 'c'.repeat(64), statementMonth: '2026-07', creditCardAccountId: 'card-1', importedAt: NOW, parserName: 'sinopac-credit-card-statement', parserVersion: '1', statementDetailTotal: 1100, parsedDetailTotal: 1100 }, observations, candidates };
+  return { batch: { id: 'batch-1', sourceType: 'sinopac-credit-card-statement-pdf', sourceFileDigest: 'c'.repeat(64), statementMonth: '2026-07', creditCardAccountId: 'card-1', importedAt: NOW, parserName: 'sinopac-credit-card-statement', parserVersion: '1', statementDetailTotal: 1100, parsedDetailTotal: 1100 }, observations, candidates, insights: candidates.map(({ id }) => ({ candidateId: id, duplicateObservationCount: 0, matches: [] })) };
 }
 
 function existingCardTransaction(): FinancialTransaction {

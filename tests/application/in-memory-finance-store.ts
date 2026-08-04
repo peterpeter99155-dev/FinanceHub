@@ -81,6 +81,7 @@ export function transactionRepository(store: InMemoryFinanceStore) {
     findById: (id: string) => store.transactions.get(id),
     listByMonth: store.listByMonth.bind(store),
     listAllByMonth: store.listAllByMonth.bind(store),
+    listAll: () => [...store.transactions.values()],
     countByCategoryId: (id: string) =>
       [...store.transactions.values()].filter(
         (transaction) => transaction.categoryId === id,

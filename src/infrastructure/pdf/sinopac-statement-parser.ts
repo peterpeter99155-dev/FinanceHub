@@ -22,9 +22,10 @@ import {
   FinanceHubError,
 } from '../../shared/errors';
 import { IMPORT_WARNING_CODES } from '../../shared/import-warning-codes';
+import { observationFingerprintInput } from '../../shared/import-fingerprint';
 
 export const SINOPAC_PARSER_NAME = 'sinopac-credit-card-statement-pdf';
-export const SINOPAC_PARSER_VERSION = '1.0.0';
+export const SINOPAC_PARSER_VERSION = '1.1.0';
 
 interface PdfParseLimits {
   readonly maxFileBytes: number;
@@ -242,16 +243,14 @@ function buildParsedBatch(
       const amount = Math.abs(parsed.signedAmount);
       observations.push({
         observationFingerprint: createHash('sha256')
-          .update([
-            SINOPAC_PARSER_NAME,
+          .update(
+            observationFingerprintInput({
             occurredAt,
-            parsed.postingMd,
-            parsed.cardLastFour,
-            parsed.summary,
-            parsed.signedAmount,
-            pageIndex + 1,
-            row.y,
-          ].join('|'))
+              statementEffect: parsed.signedAmount,
+              summary: parsed.summary,
+              creditCardAccountId: request.creditCardAccountId,
+            }),
+          )
           .digest('hex'),
         kind: parsed.warningCodes.length === 0
           ? classified.kind

@@ -28,6 +28,11 @@ import {
   createTransactionValidationOptions,
 } from '../domain/transaction';
 import { financialMonthFromDateTime } from '../domain/financial-time';
+import {
+  type CategorySuggestion,
+  matchingTransactionIds,
+  suggestImportCategory,
+} from '../domain/import-suggestions';
 import { ERROR_CODES, FinanceHubError } from '../shared/errors';
 
 const UNCATEGORIZED_EXPENSE_ID = 'expense-uncategorized';
@@ -36,6 +41,21 @@ export interface ImportBatchSnapshot {
   readonly batch: ImportBatch;
   readonly observations: readonly SourceObservation[];
   readonly candidates: readonly ImportCandidate[];
+  readonly insights: readonly ImportCandidateInsight[];
+}
+
+export interface ImportCandidateInsight {
+  readonly candidateId: string;
+  readonly duplicateObservationCount: number;
+  readonly matches: readonly ImportTransactionMatch[];
+  readonly categorySuggestion?: CategorySuggestion;
+}
+
+export interface ImportTransactionMatch {
+  readonly transaction: FinancialTransaction;
+  readonly reason:
+    | 'same_source_observation'
+    | 'matching_transaction_fields';
 }
 
 export interface ImportCandidateUpdate {
@@ -116,16 +136,84 @@ export class ImportService {
     this.imports.runInTransaction(() => {
       this.imports.createBatchGraph({ batch, observations, candidates });
     });
-    return { batch, observations, candidates };
+    return this.getBatch(batch.id);
   }
 
   getBatch(id: string): ImportBatchSnapshot {
     const batch = this.imports.findBatchById(id);
     if (!batch) throw new Error(`Import batch "${id}" was not found.`);
+    const observations = this.imports.listObservations(id);
+    const candidates = this.imports.listCandidates(id);
+    const transactions = this.transactions.listAll();
     return {
       batch,
-      observations: this.imports.listObservations(id),
-      candidates: this.imports.listCandidates(id),
+      observations,
+      candidates,
+      insights: candidates.map((candidate) =>
+        this.buildInsight(
+          candidate,
+          observations.find(
+            ({ id: observationId }) =>
+              observationId === candidate.observationId,
+          )!,
+          transactions,
+        ),
+      ),
+    };
+  }
+
+  private buildInsight(
+    candidate: ImportCandidate,
+    observation: SourceObservation,
+    transactions: readonly FinancialTransaction[],
+  ): ImportCandidateInsight {
+    const previousObservations =
+      this.imports
+        .findObservationsByFingerprint(
+          observation.observationFingerprint,
+        )
+        .filter(({ batchId }) => batchId !== candidate.batchId);
+    const matches = new Map<string, ImportTransactionMatch>();
+    for (const previous of previousObservations) {
+      const link = this.imports.findSourceLinkByObservationId(previous.id);
+      const transaction = link
+        ? this.transactions.findById(link.transactionId)
+        : undefined;
+      if (transaction) {
+        matches.set(transaction.id, {
+          transaction,
+          reason: 'same_source_observation',
+        });
+      }
+    }
+    for (const transactionId of matchingTransactionIds(
+      candidate,
+      transactions,
+    )) {
+      if (!matches.has(transactionId)) {
+        const transaction = this.transactions.findById(transactionId);
+        if (!transaction) continue;
+        matches.set(transactionId, {
+          transaction,
+          reason: 'matching_transaction_fields',
+        });
+      }
+    }
+    const categorySuggestion = suggestImportCategory(
+      candidate,
+      transactions,
+    );
+    const suggestedCategory = categorySuggestion
+      ? this.categories.findById(categorySuggestion.categoryId)
+      : undefined;
+    return {
+      candidateId: candidate.id,
+      duplicateObservationCount: previousObservations.length,
+      matches: [...matches.values()],
+      categorySuggestion:
+        suggestedCategory?.isActive && suggestedCategory.kind === 'expense'
+          ? categorySuggestion
+          : undefined,
     };
   }
 
@@ -208,7 +296,7 @@ export class ImportService {
           this.requireCreatableCandidate(candidate),
           now,
         )
-        : this.requireExistingTransactionId(decision);
+        : this.requireExistingTransactionId(candidate, decision);
     this.imports.createSourceLink({
       observationId: candidate.observationId,
       transactionId,
@@ -281,16 +369,23 @@ export class ImportService {
   }
 
   private requireExistingTransactionId(
+    candidate: ImportCandidate,
     decision: CandidateDecision,
   ): string {
     const id = decision.existingTransactionId;
-    if (!id || !this.transactions.findById(id)) {
+    const transaction = id ? this.transactions.findById(id) : undefined;
+    if (
+      !transaction ||
+      !candidate.kind ||
+      transaction.kind !== candidate.kind ||
+      transaction.destinationAccountId !== candidate.creditCardAccountId
+    ) {
       throw new FinanceHubError(
         ERROR_CODES.importCandidateUnavailable,
-        'The selected existing transaction was not found.',
+        'The selected transaction does not match the candidate card and kind.',
       );
     }
-    return id;
+    return transaction.id;
   }
 
   private requirePendingCandidate(id: string): ImportCandidate {

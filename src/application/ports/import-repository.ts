@@ -16,6 +16,12 @@ export interface ImportRepository {
   createBatchGraph(graph: ImportBatchGraph): void;
   findBatchById(id: string): ImportBatch | undefined;
   findBatchBySourceFileDigest(digest: string): ImportBatch | undefined;
+  findObservationsByFingerprint(
+    fingerprint: string,
+  ): readonly SourceObservation[];
+  findSourceLinkByObservationId(
+    observationId: string,
+  ): TransactionSourceLink | undefined;
   listCandidates(batchId: string): readonly ImportCandidate[];
   listObservations(batchId: string): readonly SourceObservation[];
   findCandidateById(id: string): ImportCandidate | undefined;

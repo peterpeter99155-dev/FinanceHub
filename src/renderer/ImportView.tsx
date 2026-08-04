@@ -63,7 +63,15 @@ export function ImportView({ accounts, onCreateCreditCard, onBalancesChanged }: 
     setDrafts(Object.fromEntries(next.candidates.map((item) => [item.id, draftFromCandidate(item)])));
     const [year, month] = next.batch.statementMonth.split('-').map(Number);
     const existing = await window.financeHub.transactions.listMonth(year, month);
-    setTransactions(existing.items);
+    const suggested = next.insights.flatMap((insight) =>
+      insight.matches.map(({ transaction }) => transaction),
+    );
+    setTransactions(
+      [...existing.items, ...suggested].filter(
+        (item, index, all) =>
+          all.findIndex(({ id }) => id === item.id) === index,
+      ),
+    );
   }
 
   function changeDraft(id: string, patch: Partial<ImportCandidateDraft>) {
@@ -104,7 +112,7 @@ export function ImportView({ accounts, onCreateCreditCard, onBalancesChanged }: 
       <div className="import-feedback-slot">{ui.feedback && <BackupStatusFeedback feedback={ui.feedback} />}</div>
       <ImportSourceForm cards={cards} selection={selection} password={password} cardId={cardId} busy={ui.busy} onCardId={setCardId} onPassword={setPassword} onSelect={() => void selectFile()} onParse={() => void parseStatement()} onCreateCard={onCreateCreditCard} />
       {snapshot && <><ImportBatchSummary snapshot={snapshot} /><div className="import-list-heading"><h2>待確認項目</h2><button type="button" disabled={ui.busy || pendingIds.length === 0} onClick={() => void confirm(pendingIds)}>確認全部處理方式</button></div>
-        <div className="import-candidate-list">{snapshot.candidates.map((candidate) => <ImportCandidateCard key={candidate.id} candidate={candidate} observation={snapshot.observations.find((item) => item.id === candidate.observationId)} draft={drafts[candidate.id]} cards={cards} categories={categories} transactions={transactions} busy={ui.busy} onChange={(patch) => changeDraft(candidate.id, patch)} onConfirm={() => void confirm([candidate.id])} />)}</div></>}
+        <div className="import-candidate-list">{snapshot.candidates.map((candidate) => <ImportCandidateCard key={candidate.id} candidate={candidate} insight={snapshot.insights.find((item) => item.candidateId === candidate.id)} observation={snapshot.observations.find((item) => item.id === candidate.observationId)} draft={drafts[candidate.id]} cards={cards} categories={categories} transactions={transactions} busy={ui.busy} onChange={(patch) => changeDraft(candidate.id, patch)} onConfirm={() => void confirm([candidate.id])} />)}</div></>}
     </section>
   );
 }

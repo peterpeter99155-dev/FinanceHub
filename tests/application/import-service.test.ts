@@ -73,6 +73,17 @@ class MemoryImportRepository implements ImportRepository {
     );
   }
 
+  findObservationsByFingerprint(fingerprint: string) {
+    return [...this.observations.values()].filter(
+      (observation) =>
+        observation.observationFingerprint === fingerprint,
+    );
+  }
+
+  findSourceLinkByObservationId(observationId: string) {
+    return this.links.get(observationId);
+  }
+
   listCandidates(batchId: string) {
     return [...this.candidates.values()].filter(
       (candidate) => candidate.batchId === batchId,
@@ -276,6 +287,63 @@ describe('ImportService', () => {
     expect(imports.candidates.size).toBe(2);
   });
 
+  it('reports an observation already linked from another source without auto-merging it', async () => {
+    const { finance, imports, service } = setup();
+    finance.transactions.set('prior-transaction', {
+      id: 'prior-transaction', kind: 'credit_card_purchase',
+      amount: createTwdAmount(100),
+      occurredAt: '2026-07-10T04:00:00.000Z', occurredAtPrecision: 'date',
+      destinationAccountId: 'card-1', categoryId: 'expense-uncategorized',
+      name: '虛構書店', note: '', createdAt: NOW, updatedAt: NOW,
+    });
+    imports.observations.set('prior-observation', {
+      ...parsedBatch().observations[0], id: 'prior-observation',
+      batchId: 'prior-batch',
+    });
+    imports.links.set('prior-observation', {
+      observationId: 'prior-observation',
+      transactionId: 'prior-transaction', linkedAt: NOW,
+    });
+
+    const result = await service.createBatch({
+      content: new Uint8Array([2]), creditCardAccountId: 'card-1',
+    });
+
+    expect(result.insights[0]).toMatchObject({
+      duplicateObservationCount: 1,
+      matches: [{
+        reason: 'same_source_observation',
+        transaction: { id: 'prior-transaction' },
+      }],
+    });
+    expect(result.candidates[0].decision).toBeUndefined();
+    expect(finance.transactions.size).toBe(1);
+  });
+
+  it('suggests one category from confirmed history without writing it to the candidate', async () => {
+    const { finance, service } = setup();
+    finance.categories.set('expense-food', {
+      id: 'expense-food', kind: 'expense', name: '飲食',
+      isBuiltIn: true, isActive: true,
+    });
+    finance.transactions.set('history-1', {
+      id: 'history-1', kind: 'credit_card_purchase',
+      amount: createTwdAmount(800),
+      occurredAt: '2026-05-01T04:00:00.000Z', occurredAtPrecision: 'date',
+      destinationAccountId: 'card-1', categoryId: 'expense-food',
+      name: '虛構書店', note: '', createdAt: NOW, updatedAt: NOW,
+    });
+
+    const result = await service.createBatch({
+      content: new Uint8Array([3]), creditCardAccountId: 'card-1',
+    });
+
+    expect(result.insights[0].categorySuggestion).toEqual({
+      categoryId: 'expense-food', evidenceCount: 1,
+    });
+    expect(result.candidates[0].categoryId).toBeUndefined();
+  });
+
   it('applies create, link and exclude decisions atomically without modifying a linked transaction', async () => {
     const thirdObservation = {
       ...parsedBatch().observations[0],
@@ -331,6 +399,26 @@ describe('ImportService', () => {
     );
     expect(finance.items.get('card-1')?.amount).toBe(100);
     expect(imports.links.size).toBe(2);
+  });
+
+  it('rejects linking to a different card or transaction kind', async () => {
+    const { finance, service } = setup();
+    finance.transactions.set('wrong-link', {
+      id: 'wrong-link', kind: 'credit_card_refund',
+      amount: createTwdAmount(100),
+      occurredAt: '2026-07-10T04:00:00.000Z', occurredAtPrecision: 'date',
+      destinationAccountId: 'another-card', categoryId: 'expense-uncategorized',
+      name: '不相符交易', note: '', createdAt: NOW, updatedAt: NOW,
+    });
+    const created = await service.createBatch({
+      content: new Uint8Array([1]), creditCardAccountId: 'card-1',
+    });
+
+    expect(() => service.confirmCandidates(created.batch.id, [{
+      candidateId: created.candidates[0].id,
+      decision: 'link_existing', existingTransactionId: 'wrong-link',
+    }])).toThrow('does not match the candidate card and kind');
+    expect(created.candidates[0].decision).toBeUndefined();
   });
 
   it('rolls back formal transactions, balances, links and decisions when any step fails', async () => {

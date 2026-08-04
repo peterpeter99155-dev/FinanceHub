@@ -109,6 +109,17 @@ export class SqliteTransactionRepository
     return rows.map(mapTransactionRow);
   }
 
+  listAll(): readonly FinancialTransaction[] {
+    const rows = this.database
+      .prepare(
+        `${selectTransactionColumns()}
+         FROM financial_transactions
+         ORDER BY occurred_at DESC, id ASC`,
+      )
+      .all() as unknown as TransactionRow[];
+    return rows.map(mapTransactionRow);
+  }
+
   create(
     transaction: FinancialTransaction,
     financialMonth: string,

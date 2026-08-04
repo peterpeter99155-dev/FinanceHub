@@ -1431,6 +1431,8 @@ textarea {
 .import-candidate > header > div { display: grid; gap: .2rem; }
 .import-candidate.resolved { opacity: .75; }
 .import-warning { border-left: 4px solid #a46b12; background: #fff8e8; padding: .75rem; margin: 0; }
+.import-suggestion { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; border: 1px solid #b8c7be; background: #f3f7f4; border-radius: 12px; padding: .8rem; }
+.import-suggestion p { flex-basis: 100%; margin: 0; }
 .import-edit-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .85rem; }
 .import-decision { display: flex; flex-wrap: wrap; gap: 1rem; border: 0; padding: 0; }
 .import-decision legend { font-weight: 700; margin-bottom: .5rem; }
