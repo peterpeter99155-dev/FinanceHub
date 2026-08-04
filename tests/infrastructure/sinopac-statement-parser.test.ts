@@ -43,6 +43,11 @@ describe('SinopacStatementParser', () => {
       ]);
     expect(parsed.observations[4].summary)
       .toBe('FICTIONAL MULTI-LINE DESCRIPTION');
+    expect(parsed.observations[1]).toMatchObject({
+      kind: 'credit_card_purchase',
+      amount: 2600,
+      summary: 'FICTIONAL SHOP',
+    });
     expect(parsed.observations[3]).toMatchObject({
       statementEffect: -100,
       warningCodes: ['NEGATIVE_ITEM_REQUIRES_USER_CONFIRMATION'],

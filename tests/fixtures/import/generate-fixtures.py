@@ -36,7 +36,7 @@ def statement() -> bytes:
 
     text(canvas, 32, height - 40, "消費日 入帳起息日 卡號末四碼 帳單說明 臺幣金額")
     row(canvas, height - 70, ("01/01", "01/03", "1111", "虛構商店甲", "1,234"))
-    row(canvas, height - 92, ("01/02", "01/04", "1111", "FICTIONAL SHOP", "2,600"))
+    row(canvas, height - 92, ("01/02", "01/04", "1111", "FICTIONAL SHOP", "2,600 01/02 JPY12,000.00"))
     row(canvas, height - 114, ("01/05", "01/07", "1111", "虛構商店退款", "-500"))
     text(canvas, 32, height - 136, "01/06 01/08 AUTO PAYMENT FROM PRIOR STATEMENT")
     row(canvas, height - 158, ("01/06", "01/08", "1111", "虛構回饋折抵", "-100"))
