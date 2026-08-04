@@ -24,6 +24,7 @@ describe('FinancialItemCustomTypeService', () => {
       customTypeId: 'emergency-fund',
       name: '我的預備金',
       amount: createTwdAmount(10_000),
+      overpaymentBalance: createTwdAmount(0),
       status: 'confirmed',
       updatedAt: '2026-07-28T08:00:00.000Z',
       isActive: true,

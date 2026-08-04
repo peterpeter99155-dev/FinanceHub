@@ -17,6 +17,7 @@ export const TRANSACTION_KINDS = [
   'transfer',
   'credit_card_purchase',
   'credit_card_payment',
+  'credit_card_refund',
 ] as const;
 export type TransactionKind = (typeof TRANSACTION_KINDS)[number];
 
@@ -33,6 +34,7 @@ export interface TransactionAccount {
   readonly id: string;
   readonly kind: TransactionAccountKind;
   readonly balance: TwdAmount;
+  readonly overpaymentBalance: TwdAmount;
   readonly isActive: boolean;
 }
 
@@ -44,6 +46,7 @@ export interface FinancialTransaction {
   readonly sourceAccountId?: string;
   readonly destinationAccountId?: string;
   readonly categoryId?: string;
+  readonly originalTransactionId?: string;
   readonly name: string;
   readonly note: string;
   readonly createdAt: string;
@@ -59,6 +62,7 @@ export interface AccountBalanceEffect {
 export interface MonthlyTransactionSummary {
   readonly totalIncome: TwdAmount;
   readonly totalExpense: TwdAmount;
+  readonly totalRefund: TwdAmount;
   readonly balance: number;
 }
 
@@ -128,6 +132,14 @@ export function validateFinancialTransaction(
         'Credit card payment cannot have a category.',
       );
       break;
+    case 'credit_card_refund':
+      assertNoAccount(
+        source,
+        'Credit card refund cannot have a source account.',
+      );
+      assertCreditCard(destination, 'Credit card refund destination');
+      assertCategory(category, 'expense');
+      break;
   }
 }
 
@@ -176,6 +188,10 @@ export function computeAccountBalanceEffects(
     case 'credit_card_payment':
       return [
         decrease(transaction.sourceAccountId, transaction.amount),
+        decrease(transaction.destinationAccountId, transaction.amount),
+      ];
+    case 'credit_card_refund':
+      return [
         decrease(transaction.destinationAccountId, transaction.amount),
       ];
   }
@@ -229,6 +245,7 @@ export function calculateMonthlyTransactionSummary(
 
   let totalIncome = 0;
   let totalExpense = 0;
+  let totalRefund = 0;
   const expectedMonth = `${year.toString().padStart(4, '0')}-${month
     .toString()
     .padStart(2, '0')}`;
@@ -246,10 +263,12 @@ export function calculateMonthlyTransactionSummary(
       totalIncome = addSafeAmount(totalIncome, transaction.amount);
     } else if (cashFlow === 'expense') {
       totalExpense = addSafeAmount(totalExpense, transaction.amount);
+    } else if (cashFlow === 'refund') {
+      totalRefund = addSafeAmount(totalRefund, transaction.amount);
     }
   }
 
-  const balance = totalIncome - totalExpense;
+  const balance = totalIncome - totalExpense + totalRefund;
 
   if (!Number.isSafeInteger(balance)) {
     throw new Error('Monthly balance exceeds the supported range.');
@@ -258,6 +277,7 @@ export function calculateMonthlyTransactionSummary(
   return {
     totalIncome: createTwdAmount(totalIncome),
     totalExpense: createTwdAmount(totalExpense),
+    totalRefund: createTwdAmount(totalRefund),
     balance,
   };
 }
@@ -273,20 +293,25 @@ export function calculateTransactionBalance(
       balance = addSafeAmount(balance, transaction.amount);
     } else if (cashFlow === 'expense') {
       balance = addSafeAmount(balance, -transaction.amount);
+    } else if (cashFlow === 'refund') {
+      balance = addSafeAmount(balance, transaction.amount);
     }
   }
 
   return balance;
 }
 
-function transactionCashFlow(
+export function transactionCashFlow(
   kind: TransactionKind,
-): 'income' | 'expense' | 'neutral' {
+): 'income' | 'expense' | 'refund' | 'neutral' {
   if (kind === 'income') {
     return 'income';
   }
   if (kind === 'expense' || kind === 'credit_card_purchase') {
     return 'expense';
+  }
+  if (kind === 'credit_card_refund') {
+    return 'refund';
   }
   return 'neutral';
 }
@@ -330,6 +355,19 @@ function validateCommonFields(
     throw new Error(
       `Transaction note cannot exceed ${MAX_TRANSACTION_NOTE_LENGTH} characters.`,
     );
+  }
+
+  if (
+    transaction.originalTransactionId !== undefined &&
+    transaction.kind !== 'credit_card_refund'
+  ) {
+    throw new Error(
+      'Only a credit card refund can reference an original transaction.',
+    );
+  }
+
+  if (transaction.originalTransactionId === transaction.id) {
+    throw new Error('A refund cannot reference itself.');
   }
 
   const occurredAt = parseDateTime(transaction.occurredAt, 'occurredAt');

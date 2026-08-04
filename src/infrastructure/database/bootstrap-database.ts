@@ -189,6 +189,112 @@ const MIGRATIONS: readonly Migration[] = [
   },
 ] as const;
 
+const SPRINT_05_MIGRATIONS: readonly Migration[] = [
+  {
+    version: 7,
+    sql: `
+      ALTER TABLE financial_items
+        ADD COLUMN overpayment_amount INTEGER NOT NULL DEFAULT 0
+        CHECK (
+          overpayment_amount >= 0 AND
+          overpayment_amount <= 999999999999
+        );
+
+      CREATE TRIGGER financial_items_credit_card_balance_insert
+      BEFORE INSERT ON financial_items
+      WHEN
+        (NEW.type <> 'credit_card' AND NEW.overpayment_amount <> 0) OR
+        (NEW.type = 'credit_card' AND NEW.amount > 0 AND
+          NEW.overpayment_amount > 0)
+      BEGIN
+        SELECT RAISE(ABORT, 'invalid credit card balance');
+      END;
+
+      CREATE TRIGGER financial_items_credit_card_balance_update
+      BEFORE UPDATE OF type, amount, overpayment_amount ON financial_items
+      WHEN
+        (NEW.type <> 'credit_card' AND NEW.overpayment_amount <> 0) OR
+        (NEW.type = 'credit_card' AND NEW.amount > 0 AND
+          NEW.overpayment_amount > 0)
+      BEGIN
+        SELECT RAISE(ABORT, 'invalid credit card balance');
+      END;
+    `,
+  },
+  {
+    version: 8,
+    sql: `
+      ALTER TABLE financial_transactions
+        RENAME TO financial_transactions_v3_legacy;
+
+      CREATE TABLE financial_transactions (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL CHECK (
+          kind IN (
+            'income',
+            'expense',
+            'transfer',
+            'credit_card_purchase',
+            'credit_card_payment',
+            'credit_card_refund'
+          )
+        ),
+        amount INTEGER NOT NULL CHECK (
+          amount > 0 AND amount <= 999999999999
+        ),
+        occurred_at TEXT NOT NULL,
+        financial_month TEXT NOT NULL CHECK (
+          financial_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+        ),
+        source_account_id TEXT,
+        destination_account_id TEXT,
+        category_id TEXT,
+        original_transaction_id TEXT,
+        name TEXT NOT NULL CHECK (length(trim(name)) <= 50),
+        note TEXT NOT NULL CHECK (length(trim(note)) <= 200),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (source_account_id)
+          REFERENCES financial_items (id) ON DELETE RESTRICT,
+        FOREIGN KEY (destination_account_id)
+          REFERENCES financial_items (id) ON DELETE RESTRICT,
+        FOREIGN KEY (category_id)
+          REFERENCES financial_categories (id) ON DELETE RESTRICT,
+        FOREIGN KEY (original_transaction_id)
+          REFERENCES financial_transactions (id) ON DELETE SET NULL
+      );
+
+      INSERT INTO financial_transactions (
+        id, kind, amount, occurred_at, financial_month,
+        source_account_id, destination_account_id, category_id,
+        original_transaction_id, name, note, created_at, updated_at
+      )
+      SELECT
+        id, kind, amount, occurred_at, financial_month,
+        source_account_id, destination_account_id, category_id,
+        NULL, name, note, created_at, updated_at
+      FROM financial_transactions_v3_legacy;
+
+      DROP TABLE financial_transactions_v3_legacy;
+
+      CREATE INDEX financial_transactions_month_time_idx
+        ON financial_transactions (
+          financial_month,
+          occurred_at DESC,
+          id ASC
+        );
+      CREATE INDEX financial_transactions_source_account_idx
+        ON financial_transactions (source_account_id);
+      CREATE INDEX financial_transactions_destination_account_idx
+        ON financial_transactions (destination_account_id);
+      CREATE INDEX financial_transactions_category_idx
+        ON financial_transactions (category_id);
+      CREATE INDEX financial_transactions_original_transaction_idx
+        ON financial_transactions (original_transaction_id);
+    `,
+  },
+] as const;
+
 export interface BootstrapDatabase {
   readonly database: SqliteDatabase;
   close(): void;
@@ -229,7 +335,10 @@ export function bootstrapDatabaseConnection(
     )
     .run(1, new Date().toISOString());
 
-  for (const migration of MIGRATIONS) {
+  for (const migration of [
+    ...MIGRATIONS,
+    ...SPRINT_05_MIGRATIONS,
+  ]) {
     applyMigration(database, migration);
   }
 }

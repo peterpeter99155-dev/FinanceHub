@@ -128,6 +128,8 @@ export function transactionAccountFlow(
       return `計入 ${destination ?? '未知信用卡'} 待繳`;
     case 'credit_card_payment':
       return `${source ?? '未知帳戶'} → ${destination ?? '未知信用卡'}`;
+    case 'credit_card_refund':
+      return `退回 ${destination ?? '未知信用卡'}`;
   }
 }
 

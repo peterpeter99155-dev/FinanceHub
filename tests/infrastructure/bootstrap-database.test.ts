@@ -8,6 +8,8 @@ import {
   BootstrapDatabase,
   openBootstrapDatabase,
 } from '../../src/infrastructure/database/bootstrap-database';
+import { SqliteFinancialItemRepository } from '../../src/infrastructure/database/sqlite-financial-item-repository';
+import { calculateNetWorth } from '../../src/domain/net-worth';
 
 describe('openBootstrapDatabase', () => {
   let connection: BootstrapDatabase | undefined;
@@ -30,7 +32,7 @@ describe('openBootstrapDatabase', () => {
     }[];
 
     expect(migrations.map(({ version }) => version)).toEqual([
-      1, 2, 3, 4, 5, 6,
+      1, 2, 3, 4, 5, 6, 7, 8,
     ]);
     for (const migration of migrations) {
       expect(migration.applied_at).toMatch(
@@ -145,7 +147,7 @@ describe('openBootstrapDatabase', () => {
         .get() as { count: number };
 
       expect(item).toEqual({ name: '測試現金', amount: 1000 });
-      expect(Number(count.count)).toBe(6);
+      expect(Number(count.count)).toBe(8);
     } finally {
       connection?.close();
       connection = undefined;
@@ -188,6 +190,72 @@ describe('openBootstrapDatabase', () => {
 
       expect(item).toEqual({ name: '保留的現金', amount: 2500 });
       expect(Number(restoredSeed.count)).toBe(1);
+    } finally {
+      connection?.close();
+      connection = undefined;
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('upgrades legacy credit cards without changing existing totals', () => {
+    const directory = mkdtempSync(
+      path.join(tmpdir(), 'financehub-credit-card-upgrade-'),
+    );
+    const databasePath = path.join(directory, 'financehub.db');
+
+    try {
+      connection = openBootstrapDatabase(databasePath);
+      connection.database.exec(`
+        DROP TRIGGER financial_items_credit_card_balance_insert;
+        DROP TRIGGER financial_items_credit_card_balance_update;
+        DROP TABLE financial_transactions;
+        CREATE TABLE financial_transactions (
+          id TEXT PRIMARY KEY,
+          kind TEXT NOT NULL CHECK (kind IN (
+            'income', 'expense', 'transfer',
+            'credit_card_purchase', 'credit_card_payment'
+          )),
+          amount INTEGER NOT NULL CHECK (
+            amount > 0 AND amount <= 999999999999
+          ),
+          occurred_at TEXT NOT NULL,
+          financial_month TEXT NOT NULL,
+          source_account_id TEXT,
+          destination_account_id TEXT,
+          category_id TEXT,
+          name TEXT NOT NULL,
+          note TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        ALTER TABLE financial_items DROP COLUMN overpayment_amount;
+        DELETE FROM schema_migrations WHERE version IN (7, 8);
+        INSERT INTO financial_items (
+          id, name, direction, type, amount, status, updated_at,
+          is_active, include_in_net_worth
+        ) VALUES
+          ('legacy-bank', 'Legacy bank', 'asset', 'bank_deposit', 1000,
+           'confirmed', '2026-07-28T08:00:00.000Z', 1, 1),
+          ('legacy-card', 'Legacy card', 'liability', 'credit_card', 400,
+           'confirmed', '2026-07-28T08:00:00.000Z', 1, 1);
+      `);
+      const before = { totalAssets: 1_000, totalLiabilities: 400, netWorth: 600 };
+      connection.close();
+
+      connection = openBootstrapDatabase(databasePath);
+      const items = new SqliteFinancialItemRepository(
+        connection.database,
+      ).list();
+      const card = items.find(({ id }) => id === 'legacy-card');
+
+      expect(card?.amount).toBe(400);
+      expect(card?.overpaymentBalance).toBe(0);
+      expect(calculateNetWorth(items)).toEqual(before);
+      expect(
+        connection.database
+          .prepare('SELECT MAX(version) AS version FROM schema_migrations')
+          .get(),
+      ).toEqual({ version: 8 });
     } finally {
       connection?.close();
       connection = undefined;
@@ -260,6 +328,31 @@ describe('openBootstrapDatabase', () => {
       financialItemAmounts,
     );
     expect(storedTransaction.amount).toBe(999_999_999_999);
+
+    connection.database
+      .prepare(`
+        INSERT INTO financial_items (
+          id, name, direction, type, amount, overpayment_amount,
+          status, updated_at, is_active, include_in_net_worth
+        ) VALUES (
+          'precision-overpayment', 'Precision overpayment',
+          'liability', 'credit_card', 0, ?, 'confirmed', ?, 1, 1
+        )
+      `)
+      .run(999_999_999_999, '2026-07-29T00:00:00.000Z');
+    const storedOverpayment = connection.database
+      .prepare(`
+        SELECT overpayment_amount
+        FROM financial_items
+        WHERE id = 'precision-overpayment'
+      `)
+      .get() as { overpayment_amount: number };
+
+    expect(storedOverpayment.overpayment_amount).toBe(999_999_999_999);
+    expect(typeof storedOverpayment.overpayment_amount).toBe('number');
+    expect(Number.isSafeInteger(storedOverpayment.overpayment_amount)).toBe(
+      true,
+    );
 
     for (const { amount } of storedFinancialItemAmounts) {
       expect(typeof amount).toBe('number');

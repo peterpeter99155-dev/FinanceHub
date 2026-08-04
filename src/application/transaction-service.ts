@@ -9,6 +9,7 @@ import { Clock, systemClock } from './ports/clock';
 import type { FinancialItemRepository } from './ports/financial-item-repository';
 import type { TransactionRepository } from './ports/transaction-repository';
 import { toTransactionAccount } from '../domain/financial-item';
+import { applyCreditCardBalanceOperation } from '../domain/credit-card-balance';
 import {
   MAX_TRANSACTION_AMOUNT_TWD,
   MAX_TRANSACTION_NAME_LENGTH,
@@ -27,6 +28,9 @@ import {
 import { createTwdAmount } from '../domain/money';
 import { financialMonthFromDateTime } from '../domain/financial-time';
 import type {
+  FinancialItem,
+} from '../domain/financial-item';
+import {
   TransactionDraft,
   TransactionMonthSnapshot,
 } from '../shared/transactions';
@@ -205,6 +209,10 @@ export class TransactionService {
       sourceAccountId,
       destinationAccountId,
       categoryId,
+      originalTransactionId: parseOptionalId(
+        input.originalTransactionId,
+        'originalTransactionId',
+      ),
       name,
       note,
     };
@@ -270,7 +278,9 @@ export class TransactionService {
 
       this.financialItems.update({
         ...item,
-        amount: applyBalanceEffect(item.amount, effect),
+        ...(item.type === 'credit_card'
+          ? applyCreditCardEffect(item, effect)
+          : { amount: applyBalanceEffect(item.amount, effect) }),
         updatedAt,
       });
     }
@@ -298,6 +308,27 @@ export class TransactionService {
 
     return kind === 'income' ? '收入' : '支出';
   }
+}
+
+function applyCreditCardEffect(
+  item: FinancialItem,
+  effect: AccountBalanceEffect,
+): Pick<FinancialItem, 'amount' | 'overpaymentBalance'> {
+  const result = applyCreditCardBalanceOperation(
+    {
+      amountDue: item.amount,
+      overpaymentBalance: item.overpaymentBalance,
+    },
+    {
+      kind: effect.operation === 'increase' ? 'purchase' : 'refund',
+      amount: effect.amount,
+    },
+  );
+
+  return {
+    amount: result.amountDue,
+    overpaymentBalance: result.overpaymentBalance,
+  };
 }
 
 function parseMonth(

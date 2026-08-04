@@ -38,6 +38,7 @@ export interface FinancialItem {
   readonly type: FinancialItemType;
   readonly customTypeId?: string;
   readonly amount: TwdAmount;
+  readonly overpaymentBalance: TwdAmount;
   readonly status: DataStatus;
   readonly updatedAt: string;
   readonly isActive: boolean;
@@ -67,6 +68,26 @@ export function validateFinancialItem(item: FinancialItem): void {
   if (item.amount > MAX_FINANCIAL_ITEM_AMOUNT_TWD) {
     throw new Error(
       'Financial item amount exceeds the supported maximum.',
+    );
+  }
+
+  if (item.overpaymentBalance > MAX_FINANCIAL_ITEM_AMOUNT_TWD) {
+    throw new Error(
+      'Financial item overpayment balance exceeds the supported maximum.',
+    );
+  }
+
+  if (item.type !== 'credit_card' && item.overpaymentBalance !== 0) {
+    throw new Error('Only credit cards can have an overpayment balance.');
+  }
+
+  if (
+    item.type === 'credit_card' &&
+    item.amount > 0 &&
+    item.overpaymentBalance > 0
+  ) {
+    throw new Error(
+      'A credit card cannot have amount due and overpayment at the same time.',
     );
   }
 
@@ -111,6 +132,7 @@ export function toTransactionAccount(
         id: item.id,
         kind,
         balance: item.amount,
+        overpaymentBalance: item.overpaymentBalance,
         isActive: item.isActive,
       }
     : undefined;

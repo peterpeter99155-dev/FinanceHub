@@ -13,6 +13,7 @@ function createItem(
     direction: 'asset',
     type: 'bank_deposit',
     amount: createTwdAmount(1_000_000),
+    overpaymentBalance: createTwdAmount(0),
     status: 'confirmed',
     updatedAt: '2026-07-27T08:00:00.000Z',
     isActive: true,
@@ -86,6 +87,25 @@ describe('calculateNetWorth', () => {
     ]);
 
     expect(result.netWorth).toBe(-1_200_000);
+  });
+
+  it('counts credit card overpayment as an asset, not a negative liability', () => {
+    expect(
+      calculateNetWorth([
+        createItem({
+          id: 'card-1',
+          name: '示範信用卡',
+          direction: 'liability',
+          type: 'credit_card',
+          amount: createTwdAmount(0),
+          overpaymentBalance: createTwdAmount(500),
+        }),
+      ]),
+    ).toEqual({
+      totalAssets: 500,
+      totalLiabilities: 0,
+      netWorth: 500,
+    });
   });
 
   it('rejects a type and direction mismatch', () => {

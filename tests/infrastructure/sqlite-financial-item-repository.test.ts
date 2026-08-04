@@ -23,6 +23,7 @@ function createItem(
     direction: 'asset',
     type: 'bank_deposit',
     amount: createTwdAmount(1_000_000),
+    overpaymentBalance: createTwdAmount(0),
     status: 'confirmed',
     updatedAt: '2026-07-27T08:00:00.000Z',
     isActive: true,
@@ -66,6 +67,34 @@ describe('SqliteFinancialItemRepository', () => {
     repository.update(updated);
 
     expect(repository.findById(updated.id)).toEqual(updated);
+  });
+
+  it('persists a credit card overpayment and enforces the dual-balance invariant', () => {
+    const card = createItem({
+      id: 'card-1',
+      name: '示範信用卡',
+      direction: 'liability',
+      type: 'credit_card',
+      amount: createTwdAmount(0),
+      overpaymentBalance: createTwdAmount(999_999_999_999),
+    });
+
+    repository.create(card);
+    expect(repository.findById(card.id)).toEqual(card);
+
+    expect(() =>
+      repository.create({
+        ...card,
+        id: 'invalid-card',
+        amount: createTwdAmount(1),
+      }),
+    ).toThrow();
+    expect(() =>
+      repository.create({
+        ...createItem({ id: 'invalid-bank' }),
+        overpaymentBalance: createTwdAmount(1),
+      }),
+    ).toThrow();
   });
 
   it('permanently deletes an existing item', () => {

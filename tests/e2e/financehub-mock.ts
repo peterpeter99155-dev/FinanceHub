@@ -467,6 +467,7 @@ function itemFromDraft(
     ...draft,
     name: draft.name.trim() || draft.type,
     amount: createTwdAmount(draft.amount),
+    overpaymentBalance: createTwdAmount(0),
     updatedAt: NOW,
     isActive: true,
   };
@@ -505,6 +506,7 @@ function financialItem(
     direction: 'asset',
     type,
     amount: createTwdAmount(amount),
+    overpaymentBalance: createTwdAmount(0),
     status: 'confirmed',
     updatedAt: NOW,
     isActive: true,

@@ -11,6 +11,7 @@ export interface TransactionDraft {
   readonly sourceAccountId?: string;
   readonly destinationAccountId?: string;
   readonly categoryId?: string;
+  readonly originalTransactionId?: string;
   readonly name: string;
   readonly note: string;
 }

@@ -58,6 +58,7 @@ export const TRANSACTION_KIND_LABELS: Readonly<
   transfer: '帳戶轉帳',
   credit_card_purchase: '信用卡消費',
   credit_card_payment: '信用卡繳款',
+  credit_card_refund: '信用卡退款',
 };
 
 export const MANAGEMENT_TABS = [

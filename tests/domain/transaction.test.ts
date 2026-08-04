@@ -21,18 +21,21 @@ const ACCOUNTS: readonly TransactionAccount[] = [
     id: 'bank-1',
     kind: 'bank',
     balance: createTwdAmount(100_000),
+    overpaymentBalance: createTwdAmount(0),
     isActive: true,
   },
   {
     id: 'cash-1',
     kind: 'cash',
     balance: createTwdAmount(2_000),
+    overpaymentBalance: createTwdAmount(0),
     isActive: true,
   },
   {
     id: 'card-1',
     kind: 'credit_card',
     balance: createTwdAmount(0),
+    overpaymentBalance: createTwdAmount(0),
     isActive: true,
   },
 ];
@@ -109,6 +112,11 @@ describe('financial transaction', () => {
       'credit card payment',
       [{ kind: 'credit_card_payment', amount: createTwdAmount(100) }],
       0,
+    ],
+    [
+      'credit card refund',
+      [{ kind: 'credit_card_refund', amount: createTwdAmount(100) }],
+      100,
     ],
   ] as const)(
     'classifies %s consistently for transaction balances',
@@ -257,6 +265,25 @@ describe('financial transaction', () => {
     ]);
   });
 
+  it('reduces card amount due for a refund and keeps a positive amount', () => {
+    const input = transaction({
+      kind: 'credit_card_refund',
+      amount: createTwdAmount(250),
+      sourceAccountId: undefined,
+      destinationAccountId: 'card-1',
+      categoryId: 'communication',
+      originalTransactionId: 'purchase-1',
+    });
+
+    expect(calculateAccountBalanceEffects(input, OPTIONS)).toEqual([
+      {
+        accountId: 'card-1',
+        operation: 'decrease',
+        amount: 250,
+      },
+    ]);
+  });
+
   it('rejects future transactions', () => {
     expect(() =>
       validateFinancialTransaction(
@@ -362,6 +389,22 @@ describe('financial transaction', () => {
           categoryId: undefined,
         }),
         transaction({
+          id: 'card-refund',
+          kind: 'credit_card_refund',
+          amount: createTwdAmount(200),
+          sourceAccountId: undefined,
+          destinationAccountId: 'card-1',
+          originalTransactionId: 'card-purchase',
+        }),
+        transaction({
+          id: 'previous-month-refund',
+          kind: 'credit_card_refund',
+          amount: createTwdAmount(900),
+          occurredAt: '2026-06-30T12:00:00.000Z',
+          sourceAccountId: undefined,
+          destinationAccountId: 'card-1',
+        }),
+        transaction({
           id: 'previous-month',
           occurredAt: '2026-06-30T12:00:00.000Z',
           amount: createTwdAmount(9_999),
@@ -374,7 +417,45 @@ describe('financial transaction', () => {
     expect(result).toEqual({
       totalIncome: 50_000,
       totalExpense: 1_599,
-      balance: 48_401,
+      totalRefund: 200,
+      balance: 48_601,
+    });
+  });
+
+  it('counts a cross-month refund only in the month when the refund occurs', () => {
+    const purchase = transaction({
+      id: 'july-purchase',
+      kind: 'credit_card_purchase',
+      amount: createTwdAmount(1_000),
+      occurredAt: '2026-07-31T12:00:00.000Z',
+      sourceAccountId: undefined,
+      destinationAccountId: 'card-1',
+    });
+    const refund = transaction({
+      id: 'august-refund',
+      kind: 'credit_card_refund',
+      amount: createTwdAmount(400),
+      occurredAt: '2026-08-01T12:00:00.000Z',
+      sourceAccountId: undefined,
+      destinationAccountId: 'card-1',
+      originalTransactionId: purchase.id,
+    });
+
+    expect(
+      calculateMonthlyTransactionSummary([purchase, refund], 2026, 7),
+    ).toEqual({
+      totalIncome: 0,
+      totalExpense: 1_000,
+      totalRefund: 0,
+      balance: -1_000,
+    });
+    expect(
+      calculateMonthlyTransactionSummary([purchase, refund], 2026, 8),
+    ).toEqual({
+      totalIncome: 0,
+      totalExpense: 0,
+      totalRefund: 400,
+      balance: 400,
     });
   });
 });

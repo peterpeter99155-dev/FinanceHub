@@ -23,6 +23,7 @@ function account(
     direction: 'asset',
     type: 'bank_deposit',
     amount: createTwdAmount(100_000),
+    overpaymentBalance: createTwdAmount(0),
     status: 'confirmed',
     updatedAt: NOW,
     isActive: true,
@@ -113,6 +114,7 @@ describe('TransactionService', () => {
     expect(snapshot.summary).toEqual({
       totalIncome: 0,
       totalExpense: 599,
+      totalRefund: 0,
       balance: -599,
     });
     expect(items.findById('bank-1')?.amount).toBe(99_401);
@@ -151,6 +153,7 @@ describe('TransactionService', () => {
     expect(snapshot.summary).toEqual({
       totalIncome: 0,
       totalExpense: 51,
+      totalRefund: 0,
       balance: -51,
     });
   });
@@ -270,11 +273,120 @@ describe('TransactionService', () => {
     expect(snapshot.summary).toEqual({
       totalIncome: 50_000,
       totalExpense: 1_000,
+      totalRefund: 0,
       balance: 49_000,
     });
     expect(items.findById('bank-1')?.amount).toBe(144_000);
     expect(items.findById('cash-1')?.amount).toBe(7_000);
     expect(items.findById('card-1')?.amount).toBe(0);
+  });
+
+  it('applies refunds, overpayment consumption and excess payments end to end', () => {
+    let sequence = 0;
+    service = new TransactionService(
+      transactionRepository(store),
+      categoryRepository(store),
+      items,
+      () => `card-transaction-${++sequence}`,
+      { now: () => NOW },
+    );
+
+    service.create(
+      expenseDraft({
+        kind: 'credit_card_purchase',
+        amount: 300,
+        sourceAccountId: undefined,
+        destinationAccountId: 'card-1',
+      }),
+      2026,
+      7,
+    );
+    service.create(
+      expenseDraft({
+        kind: 'credit_card_refund',
+        amount: 500,
+        sourceAccountId: undefined,
+        destinationAccountId: 'card-1',
+        originalTransactionId: 'card-transaction-1',
+      }),
+      2026,
+      7,
+    );
+    service.create(
+      expenseDraft({
+        kind: 'credit_card_purchase',
+        amount: 50,
+        sourceAccountId: undefined,
+        destinationAccountId: 'card-1',
+      }),
+      2026,
+      7,
+    );
+    const snapshot = service.create(
+      expenseDraft({
+        kind: 'credit_card_payment',
+        amount: 100,
+        destinationAccountId: 'card-1',
+        categoryId: undefined,
+      }),
+      2026,
+      7,
+    );
+
+    expect(items.findById('card-1')).toMatchObject({
+      amount: 0,
+      overpaymentBalance: 250,
+    });
+    expect(items.findById('bank-1')?.amount).toBe(99_900);
+    expect(snapshot.summary).toEqual({
+      totalIncome: 0,
+      totalExpense: 350,
+      totalRefund: 500,
+      balance: 150,
+    });
+  });
+
+  it('keeps a refund and clears its link when the original purchase is deleted', () => {
+    let sequence = 0;
+    service = new TransactionService(
+      transactionRepository(store),
+      categoryRepository(store),
+      items,
+      () => `linked-transaction-${++sequence}`,
+      { now: () => NOW },
+    );
+    service.create(
+      expenseDraft({
+        kind: 'credit_card_purchase',
+        amount: 300,
+        sourceAccountId: undefined,
+        destinationAccountId: 'card-1',
+      }),
+      2026,
+      7,
+    );
+    service.create(
+      expenseDraft({
+        kind: 'credit_card_refund',
+        amount: 500,
+        sourceAccountId: undefined,
+        destinationAccountId: 'card-1',
+        originalTransactionId: 'linked-transaction-1',
+      }),
+      2026,
+      7,
+    );
+
+    service.delete('linked-transaction-1', 2026, 7);
+
+    expect(store.transactions.get('linked-transaction-2')).toMatchObject({
+      kind: 'credit_card_refund',
+      originalTransactionId: undefined,
+    });
+    expect(items.findById('card-1')).toMatchObject({
+      amount: 0,
+      overpaymentBalance: 500,
+    });
   });
 
   it('US-06 updates and deletes a transaction while restoring balances', () => {

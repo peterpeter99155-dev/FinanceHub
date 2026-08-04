@@ -105,7 +105,17 @@ export function transactionRepository(store: InMemoryFinanceStore) {
       store.transactions.set(transaction.id, transaction),
     update: (transaction: FinancialTransaction) =>
       store.transactions.set(transaction.id, transaction),
-    delete: (id: string) => store.transactions.delete(id),
+    delete: (id: string) => {
+      store.transactions.delete(id);
+      for (const [key, transaction] of store.transactions) {
+        if (transaction.originalTransactionId === id) {
+          store.transactions.set(key, {
+            ...transaction,
+            originalTransactionId: undefined,
+          });
+        }
+      }
+    },
   } satisfies TransactionRepository;
 }
 

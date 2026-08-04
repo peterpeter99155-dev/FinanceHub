@@ -44,6 +44,7 @@ export class FinancialItemService {
       id: this.createId(),
       ...draft,
       amount: createTwdAmount(draft.amount),
+      overpaymentBalance: createTwdAmount(0),
       updatedAt: this.now(),
       isActive: true,
     };

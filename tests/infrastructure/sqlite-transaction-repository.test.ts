@@ -22,6 +22,7 @@ function item(
     direction: 'asset',
     type: 'bank_deposit',
     amount: createTwdAmount(100_000),
+    overpaymentBalance: createTwdAmount(0),
     status: 'confirmed',
     updatedAt: NOW,
     isActive: true,
@@ -96,6 +97,7 @@ describe('SqliteTransactionRepository', () => {
     expect(summary(transactions, 2026, 7)).toEqual({
       totalIncome: 0,
       totalExpense: 599,
+      totalRefund: 0,
       balance: -599,
     });
   });
@@ -128,6 +130,7 @@ describe('SqliteTransactionRepository', () => {
     expect(summary(transactions, 2026, 7)).toEqual({
       totalIncome: 50_000,
       totalExpense: 0,
+      totalRefund: 0,
       balance: 50_000,
     });
   });
@@ -159,7 +162,42 @@ describe('SqliteTransactionRepository', () => {
     expect(summary(transactions, 2026, 7)).toEqual({
       totalIncome: 0,
       totalExpense: 1_000,
+      totalRefund: 0,
       balance: -1_000,
+    });
+  });
+
+  it('persists refunds and clears only the optional link when the purchase is deleted', () => {
+    const purchase = transaction({
+      id: 'purchase-1',
+      kind: 'credit_card_purchase',
+      sourceAccountId: undefined,
+      destinationAccountId: 'card-1',
+    });
+    const refund = transaction({
+      id: 'refund-1',
+      kind: 'credit_card_refund',
+      amount: createTwdAmount(200),
+      sourceAccountId: undefined,
+      destinationAccountId: 'card-1',
+      originalTransactionId: 'purchase-1',
+    });
+
+    persist(transactions, purchase);
+    persist(transactions, refund);
+    expect(transactions.findById('refund-1')).toEqual(refund);
+    expect(summary(transactions, 2026, 7)).toEqual({
+      totalIncome: 0,
+      totalExpense: 599,
+      totalRefund: 200,
+      balance: -399,
+    });
+
+    transactions.delete('purchase-1');
+
+    expect(transactions.findById('refund-1')).toEqual({
+      ...refund,
+      originalTransactionId: undefined,
     });
   });
 
@@ -243,6 +281,7 @@ describe('SqliteTransactionRepository', () => {
     expect(summary(transactions, 2026, 7)).toEqual({
       totalIncome: 0,
       totalExpense: 0,
+      totalRefund: 0,
       balance: 0,
     });
   });

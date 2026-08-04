@@ -19,6 +19,7 @@ interface FinancialItemRow {
   type: string;
   custom_type_id: string | null;
   amount: number;
+  overpayment_amount: number;
   status: string;
   updated_at: string;
   is_active: number;
@@ -33,7 +34,8 @@ export class SqliteFinancialItemRepository
   list(): readonly FinancialItem[] {
     const rows = this.database
       .prepare(
-        `SELECT id, name, direction, type, custom_type_id, amount, status, updated_at,
+        `SELECT id, name, direction, type, custom_type_id, amount,
+                overpayment_amount, status, updated_at,
                 is_active, include_in_net_worth
          FROM financial_items
          ORDER BY updated_at DESC, id ASC`,
@@ -46,7 +48,8 @@ export class SqliteFinancialItemRepository
   findById(id: string): FinancialItem | undefined {
     const row = this.database
       .prepare(
-        `SELECT id, name, direction, type, custom_type_id, amount, status, updated_at,
+        `SELECT id, name, direction, type, custom_type_id, amount,
+                overpayment_amount, status, updated_at,
                 is_active, include_in_net_worth
          FROM financial_items
          WHERE id = ?`,
@@ -72,9 +75,10 @@ export class SqliteFinancialItemRepository
     this.database
       .prepare(
         `INSERT INTO financial_items (
-          id, name, direction, type, custom_type_id, amount, status, updated_at,
+          id, name, direction, type, custom_type_id, amount,
+          overpayment_amount, status, updated_at,
           is_active, include_in_net_worth
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         item.id,
@@ -83,6 +87,7 @@ export class SqliteFinancialItemRepository
         item.type,
         item.customTypeId ?? null,
         item.amount,
+        item.overpaymentBalance,
         item.status,
         item.updatedAt,
         item.isActive ? 1 : 0,
@@ -95,7 +100,7 @@ export class SqliteFinancialItemRepository
       .prepare(
         `UPDATE financial_items
          SET name = ?, direction = ?, type = ?, custom_type_id = ?,
-             amount = ?, status = ?,
+             amount = ?, overpayment_amount = ?, status = ?,
              updated_at = ?, is_active = ?, include_in_net_worth = ?
          WHERE id = ?`,
       )
@@ -105,6 +110,7 @@ export class SqliteFinancialItemRepository
         item.type,
         item.customTypeId ?? null,
         item.amount,
+        item.overpaymentBalance,
         item.status,
         item.updatedAt,
         item.isActive ? 1 : 0,
@@ -146,6 +152,7 @@ function mapRow(row: FinancialItemRow): FinancialItem {
       ? { customTypeId: row.custom_type_id }
       : {}),
     amount: createTwdAmount(row.amount),
+    overpaymentBalance: createTwdAmount(row.overpayment_amount),
     status: status as DataStatus,
     updatedAt: row.updated_at,
     isActive: row.is_active === 1,

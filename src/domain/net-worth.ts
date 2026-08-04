@@ -33,6 +33,12 @@ export function calculateNetWorth(
       totalAssets = addTwdAmounts(totalAssets, item.amount);
     } else {
       totalLiabilities = addTwdAmounts(totalLiabilities, item.amount);
+      if (item.type === 'credit_card') {
+        totalAssets = addTwdAmounts(
+          totalAssets,
+          item.overpaymentBalance,
+        );
+      }
     }
   }
 

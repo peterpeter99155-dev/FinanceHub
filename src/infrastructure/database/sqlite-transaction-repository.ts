@@ -22,6 +22,7 @@ interface TransactionRow {
   source_account_id: string | null;
   destination_account_id: string | null;
   category_id: string | null;
+  original_transaction_id: string | null;
   name: string;
   note: string;
   created_at: string;
@@ -156,7 +157,8 @@ export class SqliteTransactionRepository
           `UPDATE financial_transactions
            SET kind = ?, amount = ?, occurred_at = ?,
                financial_month = ?, source_account_id = ?,
-               destination_account_id = ?, category_id = ?, name = ?,
+               destination_account_id = ?, category_id = ?,
+               original_transaction_id = ?, name = ?,
                note = ?, updated_at = ?
            WHERE id = ?`,
         )
@@ -168,6 +170,7 @@ export class SqliteTransactionRepository
           transaction.sourceAccountId ?? null,
           transaction.destinationAccountId ?? null,
           transaction.categoryId ?? null,
+          transaction.originalTransactionId ?? null,
           transaction.name.trim(),
           transaction.note.trim(),
           transaction.updatedAt,
@@ -200,8 +203,8 @@ export class SqliteTransactionRepository
         `INSERT INTO financial_transactions (
           id, kind, amount, occurred_at, financial_month,
           source_account_id, destination_account_id, category_id,
-          name, note, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          original_transaction_id, name, note, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         transaction.id,
@@ -212,6 +215,7 @@ export class SqliteTransactionRepository
         transaction.sourceAccountId ?? null,
         transaction.destinationAccountId ?? null,
         transaction.categoryId ?? null,
+        transaction.originalTransactionId ?? null,
         transaction.name.trim(),
         transaction.note.trim(),
         transaction.createdAt,
@@ -232,6 +236,7 @@ function mapTransactionRow(row: TransactionRow): FinancialTransaction {
     sourceAccountId: row.source_account_id ?? undefined,
     destinationAccountId: row.destination_account_id ?? undefined,
     categoryId: row.category_id ?? undefined,
+    originalTransactionId: row.original_transaction_id ?? undefined,
     name: row.name,
     note: row.note,
     createdAt: row.created_at,
@@ -241,7 +246,8 @@ function mapTransactionRow(row: TransactionRow): FinancialTransaction {
 
 function selectTransactionColumns(): string {
   return `SELECT id, kind, amount, occurred_at, source_account_id,
-                 destination_account_id, category_id, name, note,
+                 destination_account_id, category_id,
+                 original_transaction_id, name, note,
                  created_at, updated_at`;
 }
 
