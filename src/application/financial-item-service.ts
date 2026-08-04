@@ -160,7 +160,7 @@ function parseDraft(input: unknown): FinancialItemDraft {
 
   const amount = createTwdAmount(input.amount);
 
-  if (amount === 0) {
+  if (amount === 0 && type !== 'credit_card') {
     throw new FinanceHubError(
       ERROR_CODES.amountMustBePositive,
       'Amount must be greater than zero.',

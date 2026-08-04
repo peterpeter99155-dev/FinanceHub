@@ -1,0 +1,57 @@
+import { expect, test } from '@playwright/test';
+
+async function openImport(page: import('@playwright/test').Page, scenario = 'ready') {
+  await page.goto(`/?import=${scenario}`);
+  await expect(page.getByText('FinanceHub', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '帳單匯入' }).click();
+  await page.getByRole('button', { name: '選擇 PDF' }).click();
+  await page.getByTestId('pdf-password').fill('One-Time-PDF-Password');
+  await page.getByTestId('parse-statement').click();
+}
+
+test('匯入預覽顯示核對、時間未知、警告並可批次確認', async ({ page }) => {
+  await openImport(page);
+  await expect(page.getByTestId('import-reconciliation')).toContainText('一致');
+  await expect(page.getByText('2026-07-10・時間未知')).toBeVisible();
+  await expect(page.getByText('無法判斷這筆扣抵或退款，請指定交易類型。')).toBeVisible();
+  const cards = page.getByTestId('import-candidate');
+  await cards.nth(1).getByTestId('candidate-kind').selectOption('credit_card_refund');
+  await page.getByRole('button', { name: '確認全部處理方式' }).click();
+  await expect(page.getByText('這批資料已完成處理。')).toBeVisible();
+  await expect(page.getByText('已處理：建立新交易')).toHaveCount(2);
+});
+
+test('連結既有交易會顯示差異且不宣稱修改既有交易', async ({ page }) => {
+  await openImport(page, 'link');
+  const first = page.getByTestId('import-candidate').first();
+  await first.getByLabel('連結既有交易').check();
+  await first.getByTestId('existing-transaction').selectOption('existing-card-transaction');
+  await expect(first.getByTestId('import-differences')).toContainText('既有虛構餐廳');
+  await expect(first.getByTestId('import-differences')).toContainText('虛構信用卡');
+  await expect(first.getByTestId('import-differences')).toContainText('飲食');
+  await expect(first.getByText('連結只建立來源關聯，不會修改既有交易。')).toBeVisible();
+  await first.getByRole('button', { name: '確認此筆' }).click();
+  await expect(first.getByText('已處理：連結既有交易')).toBeVisible();
+});
+
+test('批次失敗不顯示成功', async ({ page }) => {
+  await openImport(page, 'confirm-failure');
+  const cards = page.getByTestId('import-candidate');
+  await cards.nth(1).getByTestId('candidate-kind').selectOption('credit_card_refund');
+  await page.getByRole('button', { name: '確認全部處理方式' }).click();
+  await expect(page.getByText('待確認項目已處理、資料不完整或不存在。')).toBeVisible();
+  await expect(page.getByText('這批資料已完成處理。')).toHaveCount(0);
+  await expect(page.getByText(/已處理：/)).toHaveCount(0);
+});
+
+test('沒有信用卡時可前往新增信用卡', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: '帳單匯入' }).click();
+  await expect(page.getByText('請先新增要對應的信用卡。')).toBeVisible();
+  await page.getByRole('button', { name: '新增信用卡' }).click();
+  await expect(page.getByTestId('item-type')).toHaveValue('credit_card');
+  await page.getByTestId('item-name').fill('虛構信用卡');
+  await page.getByTestId('item-amount').fill('0');
+  await page.getByRole('button', { name: '新增項目' }).click();
+  await expect(page.getByText('虛構信用卡', { exact: true })).toBeVisible();
+});

@@ -174,6 +174,21 @@ describe('FinancialItemService', () => {
     expect(snapshot.summary.netWorth).toBe(0);
   });
 
+  it('allows a new credit card with no amount due', () => {
+    const snapshot = service.create({
+      ...ASSET_DRAFT,
+      direction: 'liability',
+      type: 'credit_card',
+      amount: 0,
+    });
+
+    expect(snapshot.items[0]).toMatchObject({
+      type: 'credit_card',
+      amount: 0,
+      overpaymentBalance: 0,
+    });
+  });
+
   it.each([
     [{ ...ASSET_DRAFT, name: 'x'.repeat(101) }, '100 characters'],
     [{ ...ASSET_DRAFT, amount: 0 }, 'greater than zero'],

@@ -8,7 +8,7 @@ import {
 import { filterNewPasswordInput } from '../../shared/security-password';
 
 interface PasswordInputProps {
-  readonly autoComplete: 'current-password' | 'new-password';
+  readonly autoComplete: 'current-password' | 'new-password' | 'off';
   readonly dataTestId: string;
   readonly label: string;
   readonly maxLength: number;

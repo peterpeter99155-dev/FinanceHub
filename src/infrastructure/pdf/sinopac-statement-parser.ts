@@ -21,6 +21,7 @@ import {
   type ErrorCode,
   FinanceHubError,
 } from '../../shared/errors';
+import { IMPORT_WARNING_CODES } from '../../shared/import-warning-codes';
 
 export const SINOPAC_PARSER_NAME = 'sinopac-credit-card-statement-pdf';
 export const SINOPAC_PARSER_VERSION = '1.0.0';
@@ -368,7 +369,10 @@ function resolveSplitDescription(
     )
     .sort((left, right) => left.sourceIndex - right.sourceIndex);
   if (fragments.length !== 2) {
-    return { warningCode: 'SPLIT_DESCRIPTION_FRAGMENT_COUNT_UNSUPPORTED' };
+    return {
+      warningCode:
+        IMPORT_WARNING_CODES.splitDescriptionFragmentCountUnsupported,
+    };
   }
   if (fragments[1].sourceIndex !== fragments[0].sourceIndex + 1) {
     return { warningCode: 'SPLIT_DESCRIPTION_SOURCE_ORDER_NONCONTIGUOUS' };
@@ -439,9 +443,15 @@ export function classifySinopacObservation(
     return { kind: 'credit_card_refund', warningCodes: [] };
   }
   if (signedAmount === 0) {
-    return { warningCodes: ['ZERO_AMOUNT_NOT_IMPORTABLE'] };
+    return {
+      warningCodes: [IMPORT_WARNING_CODES.zeroAmountNotImportable],
+    };
   }
-  return { warningCodes: ['NEGATIVE_ITEM_REQUIRES_USER_CONFIRMATION'] };
+  return {
+    warningCodes: [
+      IMPORT_WARNING_CODES.negativeItemRequiresUserConfirmation,
+    ],
+  };
 }
 
 function parseStatementTotal(compactText: string): number | undefined {

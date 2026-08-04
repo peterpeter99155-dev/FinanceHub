@@ -1,0 +1,110 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ImportBatchSnapshot, ImportCandidateUpdate } from '../application/import-service';
+import type { FinancialCategory } from '../domain/category';
+import type { FinancialItem } from '../domain/financial-item';
+import type { CandidateDecision, ImportCandidate } from '../domain/import';
+import type { FinancialTransaction } from '../domain/transaction';
+import type { ImportFileSelection } from '../shared/imports';
+import { BackupStatusFeedback, type BackupFeedback } from './components/BackupStatusFeedback';
+import { ImportBatchSummary } from './components/ImportBatchSummary';
+import { ImportCandidateCard } from './components/ImportCandidateCard';
+import { ImportSourceForm } from './components/ImportSourceForm';
+import { activeCreditCards, dateOnlyToTaipeiNoon, draftFromCandidate, type ImportCandidateDraft } from './importViewModel';
+import { importErrorMessage } from './messages';
+
+interface Props { readonly accounts: readonly FinancialItem[]; readonly onCreateCreditCard: () => void; readonly onBalancesChanged: () => Promise<void>; }
+interface UiState { readonly busy: boolean; readonly feedback?: BackupFeedback; }
+
+export function ImportView({ accounts, onCreateCreditCard, onBalancesChanged }: Props) {
+  const cards = useMemo(() => activeCreditCards(accounts), [accounts]);
+  const [selection, setSelection] = useState<ImportFileSelection | null>(null);
+  const [password, setPassword] = useState('');
+  const [cardId, setCardId] = useState(cards[0]?.id ?? '');
+  const [snapshot, setSnapshot] = useState<ImportBatchSnapshot | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, ImportCandidateDraft>>({});
+  const [categories, setCategories] = useState<readonly FinancialCategory[]>([]);
+  const [transactions, setTransactions] = useState<readonly FinancialTransaction[]>([]);
+  const [ui, setUi] = useState<UiState>({ busy: false });
+  const feedbackTimer = useRef<number | null>(null);
+
+  useEffect(() => { void window.financeHub.categories.list().then(setCategories); }, []);
+  useEffect(() => { if (!cardId && cards[0]) setCardId(cards[0].id); }, [cardId, cards]);
+  useEffect(() => () => { if (feedbackTimer.current !== null) window.clearTimeout(feedbackTimer.current); }, []);
+
+  function showFeedback(feedback: BackupFeedback) {
+    setUi((current) => ({ ...current, feedback }));
+    if (feedbackTimer.current !== null) window.clearTimeout(feedbackTimer.current);
+    if (feedback.tone === 'success') feedbackTimer.current = window.setTimeout(() => setUi((current) => ({ ...current, feedback: undefined })), 3_000);
+  }
+
+  async function selectFile() {
+    setUi({ busy: true });
+    try { setSelection(await window.financeHub.imports.selectStatementFile()); }
+    catch (error) { showFeedback({ tone: 'error', message: importErrorMessage(error) }); }
+    finally { setUi((current) => ({ ...current, busy: false })); }
+  }
+
+  async function parseStatement() {
+    if (selection?.status !== 'selected') return;
+    setUi({ busy: true });
+    try {
+      const next = await window.financeHub.imports.parseSelectedStatement(selection.selectionToken, password, cardId);
+      setPassword('');
+      await loadSnapshot(next);
+      showFeedback({ tone: 'success', message: '帳單解析完成，請逐筆確認。' });
+    } catch (error) {
+      setPassword('');
+      showFeedback({ tone: 'error', message: importErrorMessage(error) });
+    } finally { setUi((current) => ({ ...current, busy: false })); }
+  }
+
+  async function loadSnapshot(next: ImportBatchSnapshot) {
+    setSnapshot(next);
+    setDrafts(Object.fromEntries(next.candidates.map((item) => [item.id, draftFromCandidate(item)])));
+    const [year, month] = next.batch.statementMonth.split('-').map(Number);
+    const existing = await window.financeHub.transactions.listMonth(year, month);
+    setTransactions(existing.items);
+  }
+
+  function changeDraft(id: string, patch: Partial<ImportCandidateDraft>) {
+    setDrafts((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
+  }
+
+  async function persistDraft(candidate: ImportCandidate, draft: ImportCandidateDraft) {
+    if (draft.decision !== 'create_new') return;
+    if (!draft.kind || !draft.date || !draft.creditCardAccountId || Number(draft.amount) <= 0) throw { code: 'IMPORT_CANDIDATE_UNAVAILABLE' };
+    const update: ImportCandidateUpdate = { kind: draft.kind, amount: Number(draft.amount), occurredAt: dateOnlyToTaipeiNoon(draft.date), occurredAtPrecision: 'date', name: draft.name.trim(), creditCardAccountId: draft.creditCardAccountId, categoryId: draft.categoryId || undefined };
+    await window.financeHub.imports.updateCandidate(candidate.id, update);
+  }
+
+  function decisionFor(candidate: ImportCandidate, draft: ImportCandidateDraft): CandidateDecision {
+    return { candidateId: candidate.id, decision: draft.decision, existingTransactionId: draft.decision === 'link_existing' ? draft.existingTransactionId : undefined };
+  }
+
+  async function confirm(candidateIds: readonly string[]) {
+    if (!snapshot) return;
+    setUi({ busy: true });
+    try {
+      const candidates = snapshot.candidates.filter((item) => candidateIds.includes(item.id) && !item.decision);
+      for (const candidate of candidates) await persistDraft(candidate, drafts[candidate.id]);
+      const decisions = candidates.map((candidate) => decisionFor(candidate, drafts[candidate.id]));
+      if (decisions.some((item) => item.decision === 'link_existing' && !item.existingTransactionId)) throw { code: 'IMPORT_CANDIDATE_UNAVAILABLE' };
+      const next = await window.financeHub.imports.confirmCandidates(snapshot.batch.id, decisions);
+      await loadSnapshot(next);
+      await onBalancesChanged();
+      showFeedback({ tone: 'success', message: candidateIds.length === 1 ? '這筆資料已確認。' : '這批資料已完成處理。' });
+    } catch (error) { showFeedback({ tone: 'error', message: importErrorMessage(error) }); }
+    finally { setUi((current) => ({ ...current, busy: false })); }
+  }
+
+  const pendingIds = snapshot?.candidates.filter((item) => !item.decision).map((item) => item.id) ?? [];
+  return (
+    <section className="import-view">
+      <div className="page-heading"><div><p className="label">交易自動化</p><h2>帳單匯入與待確認</h2></div></div>
+      <div className="import-feedback-slot">{ui.feedback && <BackupStatusFeedback feedback={ui.feedback} />}</div>
+      <ImportSourceForm cards={cards} selection={selection} password={password} cardId={cardId} busy={ui.busy} onCardId={setCardId} onPassword={setPassword} onSelect={() => void selectFile()} onParse={() => void parseStatement()} onCreateCard={onCreateCreditCard} />
+      {snapshot && <><ImportBatchSummary snapshot={snapshot} /><div className="import-list-heading"><h2>待確認項目</h2><button type="button" disabled={ui.busy || pendingIds.length === 0} onClick={() => void confirm(pendingIds)}>確認全部處理方式</button></div>
+        <div className="import-candidate-list">{snapshot.candidates.map((candidate) => <ImportCandidateCard key={candidate.id} candidate={candidate} observation={snapshot.observations.find((item) => item.id === candidate.observationId)} draft={drafts[candidate.id]} cards={cards} categories={categories} transactions={transactions} busy={ui.busy} onChange={(patch) => changeDraft(candidate.id, patch)} onConfirm={() => void confirm([candidate.id])} />)}</div></>}
+    </section>
+  );
+}

@@ -1416,6 +1416,35 @@ textarea {
   background: #edf2ee;
 }
 
+.import-view { display: grid; gap: 1rem; }
+.import-feedback-slot { min-height: 3rem; max-width: 48rem; }
+.import-source-panel, .import-candidate { display: grid; gap: 1rem; }
+.import-source-fields { display: grid; gap: .9rem; }
+.import-source-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; }
+.import-batch-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .75rem; }
+.import-batch-summary > div { display: grid; gap: .25rem; }
+.import-batch-summary span, .import-candidate .label { color: var(--muted); font-size: .92rem; }
+.import-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.import-candidate-list { display: grid; gap: 1rem; }
+.import-candidate { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 1.25rem; }
+.import-candidate > header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.import-candidate > header > div { display: grid; gap: .2rem; }
+.import-candidate.resolved { opacity: .75; }
+.import-warning { border-left: 4px solid #a46b12; background: #fff8e8; padding: .75rem; margin: 0; }
+.import-edit-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .85rem; }
+.import-decision { display: flex; flex-wrap: wrap; gap: 1rem; border: 0; padding: 0; }
+.import-decision legend { font-weight: 700; margin-bottom: .5rem; }
+.import-decision label { display: flex; flex-direction: row; align-items: center; gap: .4rem; }
+.import-link-panel { display: grid; gap: .75rem; border: 1px solid var(--border); border-radius: 12px; padding: 1rem; }
+.import-differences { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; margin: 0; }
+.import-differences > div { border-left: 3px solid var(--border); padding-left: .7rem; }
+.import-differences > div.different { border-left-color: #a46b12; }
+.import-differences dt { font-weight: 700; }
+.import-differences dd { margin: .15rem 0 0; }
+@media (max-width: 900px) {
+  .import-batch-summary, .import-edit-grid, .import-differences { grid-template-columns: 1fr; }
+}
+
 .transaction-empty {
   padding: 48px 20px;
   color: #758179;

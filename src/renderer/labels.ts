@@ -33,6 +33,7 @@ export const FINANCIAL_ITEM_TYPE_OPTIONS: Readonly<
   liability: [
     { value: 'mortgage', label: '房貸' },
     { value: 'loan', label: '其他貸款' },
+    { value: 'credit_card', label: '信用卡' },
     { value: 'custom_liability', label: '自訂負債' },
   ],
 };

@@ -7,6 +7,8 @@ import {
 import type { FinancialItemCustomType } from '../../src/domain/financial-item-custom-type';
 import { createTwdAmount } from '../../src/domain/money';
 import type { FinancialTransaction } from '../../src/domain/transaction';
+import type { ImportBatchSnapshot } from '../../src/application/import-service';
+import type { ImportCandidate, SourceObservation } from '../../src/domain/import';
 import {
   applyBalanceEffect,
   calculateAccountBalanceEffects,
@@ -17,6 +19,7 @@ import {
 import type { FinanceHubApi } from '../../src/shared/bootstrap';
 import type { BackupStatus } from '../../src/shared/backups';
 import type { FinancialItemDraft } from '../../src/shared/financial-items';
+import { IMPORT_WARNING_CODES } from '../../src/shared/import-warning-codes';
 import type {
   FinancialItemCustomTypeDraft,
 } from '../../src/shared/management';
@@ -89,6 +92,10 @@ function createApi(
     unlock(password: string): void;
   },
 ): FinanceHubApi {
+  const importScenario = new URLSearchParams(window.location.search).get('import');
+  if (importScenario !== null) state.items.push(creditCardItem());
+  let importSnapshot = createImportSnapshot();
+  if (importScenario === 'link') state.transactions.push(existingCardTransaction());
   let backupStatus: BackupStatus = {
     automaticEnabled: true,
     dataDirectory: 'C:\\FinanceHub-Test-Data',
@@ -282,22 +289,28 @@ function createApi(
       },
     },
     imports: {
-      selectStatementFile: async () => ({ status: 'cancelled' }),
+      selectStatementFile: async () => ({ status: 'selected', selectionToken: 'selection-1', displayName: '虛構信用卡帳單.pdf' }),
       parseSelectedStatement: async () => {
-        throw new Error('Import UI is not implemented in this stage.');
+        if (importScenario === 'failure') throw { code: 'PDF_PARSE_INCOMPLETE' };
+        return importSnapshot;
       },
-      getBatch: async () => {
-        throw new Error('Import UI is not implemented in this stage.');
+      getBatch: async () => importSnapshot,
+      updateCandidate: async (id, update) => {
+        const current = importSnapshot.candidates.find((item) => item.id === id);
+        if (!current) throw { code: 'IMPORT_CANDIDATE_UNAVAILABLE' };
+        const updated = { ...current, ...update, updatedAt: NOW };
+        importSnapshot = { ...importSnapshot, candidates: importSnapshot.candidates.map((item) => item.id === id ? updated : item) };
+        return updated;
       },
-      updateCandidate: async () => {
-        throw new Error('Import UI is not implemented in this stage.');
+      confirmCandidates: async (_batchId, decisions) => {
+        if (importScenario === 'confirm-failure') throw { code: 'IMPORT_CANDIDATE_UNAVAILABLE' };
+        importSnapshot = { ...importSnapshot, candidates: importSnapshot.candidates.map((item) => {
+          const decision = decisions.find((entry) => entry.candidateId === item.id);
+          return decision ? { ...item, decision: decision.decision, transactionId: decision.existingTransactionId ?? `created-${item.id}`, updatedAt: NOW } : item;
+        }) };
+        return importSnapshot;
       },
-      confirmCandidates: async () => {
-        throw new Error('Import UI is not implemented in this stage.');
-      },
-      excludeBatch: async () => {
-        throw new Error('Import UI is not implemented in this stage.');
-      },
+      excludeBatch: async () => importSnapshot,
     },
     transactions: {
       listMonth: async (year, month, offset = 0) =>
@@ -531,4 +544,21 @@ function financialItem(
     isActive: true,
     includeInNetWorth: true,
   };
+}
+
+function creditCardItem(): FinancialItem {
+  return { id: 'card-1', name: '虛構信用卡', direction: 'liability', type: 'credit_card', amount: createTwdAmount(2_000), overpaymentBalance: createTwdAmount(0), status: 'confirmed', updatedAt: NOW, isActive: true, includeInNetWorth: true };
+}
+
+function createImportSnapshot(): ImportBatchSnapshot {
+  const observations: SourceObservation[] = [
+    { id: 'observation-1', batchId: 'batch-1', observationFingerprint: 'a'.repeat(64), kind: 'credit_card_purchase', amount: 1200, statementEffect: 1200, occurredAt: '2026-07-10T04:00:00.000Z', occurredAtPrecision: 'date', summary: '虛構餐廳', pageNumber: 2, anonymousRowLocator: 'page-2-row-1', warningCodes: [] },
+    { id: 'observation-2', batchId: 'batch-1', observationFingerprint: 'b'.repeat(64), amount: 100, statementEffect: -100, occurredAt: '2026-07-12T04:00:00.000Z', occurredAtPrecision: 'date', summary: '虛構扣抵', pageNumber: 2, anonymousRowLocator: 'page-2-row-2', warningCodes: [IMPORT_WARNING_CODES.negativeItemRequiresUserConfirmation] },
+  ];
+  const candidates: ImportCandidate[] = observations.map((item, index) => ({ id: `candidate-${index + 1}`, batchId: 'batch-1', observationId: item.id, kind: item.kind, amount: item.amount, occurredAt: item.occurredAt, occurredAtPrecision: item.occurredAtPrecision, name: item.summary, creditCardAccountId: 'card-1', updatedAt: NOW }));
+  return { batch: { id: 'batch-1', sourceType: 'sinopac-credit-card-statement-pdf', sourceFileDigest: 'c'.repeat(64), statementMonth: '2026-07', creditCardAccountId: 'card-1', importedAt: NOW, parserName: 'sinopac-credit-card-statement', parserVersion: '1', statementDetailTotal: 1100, parsedDetailTotal: 1100 }, observations, candidates };
+}
+
+function existingCardTransaction(): FinancialTransaction {
+  return { id: 'existing-card-transaction', kind: 'credit_card_purchase', amount: createTwdAmount(1300), occurredAt: '2026-07-10T04:00:00.000Z', occurredAtPrecision: 'date', destinationAccountId: 'card-1', categoryId: 'expense-food', name: '既有虛構餐廳', note: '', createdAt: NOW, updatedAt: NOW };
 }

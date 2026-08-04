@@ -102,6 +102,18 @@ export function transactionErrorMessage(error: unknown): string {
   return '交易儲存失敗，請確認輸入內容。';
 }
 
+export function importErrorMessage(error: unknown): string {
+  const code = errorCodeOf(error);
+  if (code === ERROR_CODES.importDuplicateSource) return '這份帳單已經匯入過。';
+  if (code === ERROR_CODES.importReconciliationMismatch) return '帳單明細加總與銀行合計不一致，無法確認。';
+  if (code === ERROR_CODES.importCandidateUnavailable) return '待確認項目已處理、資料不完整或不存在。';
+  if (code === ERROR_CODES.invalidAccount) return '請選擇有效的信用卡。';
+  if (code === ERROR_CODES.invalidCategory) return '請選擇有效的支出分類。';
+  if (code === ERROR_CODES.amountOutOfRange) return '金額不在可接受範圍內。';
+  if (code === ERROR_CODES.futureTransaction) return '交易日期不能晚於今天。';
+  return '帳單匯入未完成，請檢查檔案、PDF 密碼與待確認內容。';
+}
+
 export function backupErrorMessage(error: unknown): string {
   const code = errorCodeOf(error);
   if (code === ERROR_CODES.backupInProgress) {

@@ -9,6 +9,7 @@ import { ManagementDialog } from './components/ManagementDialog';
 import { DeleteFinancialItemDialog } from './components/DeleteFinancialItemDialog';
 import { BackupSettingsView } from './components/BackupSettingsView';
 import { useAppController } from './hooks/useAppController';
+import { ImportView } from './ImportView';
 
 export function App() {
   const {
@@ -39,6 +40,7 @@ export function App() {
     openManagement,
     pendingDeleteItem,
     prepareNewAsset,
+    prepareNewCreditCard,
     resetForm,
     setActiveView,
     setCategories,
@@ -95,6 +97,13 @@ export function App() {
               onClick={() => setActiveView('transactions')}
             >
               收支紀錄
+            </button>
+            <button
+              className={activeView === 'imports' ? 'selected' : ''}
+              type="button"
+              onClick={() => setActiveView('imports')}
+            >
+              帳單匯入
             </button>
             <button
               className={activeView === 'backups' ? 'selected' : ''}
@@ -211,6 +220,12 @@ export function App() {
                 void openManagement(section)
               }
               typeManagementVersion={typeManagementVersion}
+            />
+          ) : activeView === 'imports' ? (
+            <ImportView
+              accounts={viewState.snapshot.items}
+              onBalancesChanged={loadItems}
+              onCreateCreditCard={prepareNewCreditCard}
             />
           ) : (
             <BackupSettingsView />

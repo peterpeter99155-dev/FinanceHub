@@ -156,9 +156,6 @@ export function FinancialItemForm({
             }
             onChange={(event) => onItemTypeChange(event.target.value)}
           >
-            {draft.type === 'credit_card' && (
-              <option value="credit_card">信用卡（既有）</option>
-            )}
             {FINANCIAL_ITEM_TYPE_OPTIONS[draft.direction].map(
               (option) => (
                 <option key={option.value} value={option.value}>
@@ -264,7 +261,10 @@ export function FinancialItemForm({
         <button
           className="primary-button"
           data-testid="save-item"
-          disabled={isSaving || draft.amount === '0'}
+          disabled={
+            isSaving ||
+            (draft.amount === '0' && draft.type !== 'credit_card')
+          }
           type="submit"
         >
           {isSaving

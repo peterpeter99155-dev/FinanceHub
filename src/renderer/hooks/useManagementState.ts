@@ -19,7 +19,7 @@ export function useManagementState() {
     null,
   );
   const [activeView, setActiveView] = useState<
-    'assets' | 'transactions' | 'backups'
+    'assets' | 'transactions' | 'imports' | 'backups'
   >('assets');
   const [typeManagementVersion, setTypeManagementVersion] = useState(0);
 
