@@ -90,6 +90,15 @@ export function transactionErrorMessage(error: unknown): string {
   if (code === ERROR_CODES.invalidAccount) {
     return '請選擇正確的收款、付款或信用卡帳戶。';
   }
+  if (code === ERROR_CODES.importDuplicateSource) {
+    return '這份來源檔案已經匯入過。';
+  }
+  if (code === ERROR_CODES.importReconciliationMismatch) {
+    return '帳單明細加總與銀行合計不一致，請先檢查內容。';
+  }
+  if (code === ERROR_CODES.importCandidateUnavailable) {
+    return '這筆待確認資料已處理或不存在。';
+  }
   return '交易儲存失敗，請確認輸入內容。';
 }
 

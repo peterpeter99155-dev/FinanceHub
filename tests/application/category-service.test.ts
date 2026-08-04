@@ -31,6 +31,7 @@ function usedStore(): InMemoryFinanceStore {
     kind: 'expense',
     amount: createTwdAmount(100),
     occurredAt: '2026-07-28T07:00:00.000Z',
+    occurredAtPrecision: 'datetime',
     categoryId: 'source',
     name: '宵夜',
     note: '',

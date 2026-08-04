@@ -138,6 +138,7 @@ describe('TransactionService', () => {
         kind: 'expense',
         amount: createTwdAmount(1),
         occurredAt: `2026-07-28T07:${String(index).padStart(2, '0')}:00.000Z`,
+        occurredAtPrecision: 'datetime',
         categoryId: 'expense-communication',
         name: '通訊',
         note: '',

@@ -10,6 +10,7 @@ import {
   FinancialTransaction,
   TransactionKind,
 } from '../../domain/transaction';
+import type { FinancialTimePrecision } from '../../domain/import';
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 50;
@@ -19,6 +20,7 @@ interface TransactionRow {
   kind: string;
   amount: number;
   occurred_at: string;
+  occurred_at_precision: string;
   source_account_id: string | null;
   destination_account_id: string | null;
   category_id: string | null;
@@ -156,6 +158,7 @@ export class SqliteTransactionRepository
         .prepare(
           `UPDATE financial_transactions
            SET kind = ?, amount = ?, occurred_at = ?,
+               occurred_at_precision = ?,
                financial_month = ?, source_account_id = ?,
                destination_account_id = ?, category_id = ?,
                original_transaction_id = ?, name = ?,
@@ -166,6 +169,7 @@ export class SqliteTransactionRepository
           transaction.kind,
           transaction.amount,
           transaction.occurredAt,
+          transaction.occurredAtPrecision,
           financialMonth,
           transaction.sourceAccountId ?? null,
           transaction.destinationAccountId ?? null,
@@ -201,16 +205,18 @@ export class SqliteTransactionRepository
     this.database
       .prepare(
         `INSERT INTO financial_transactions (
-          id, kind, amount, occurred_at, financial_month,
+          id, kind, amount, occurred_at, occurred_at_precision,
+          financial_month,
           source_account_id, destination_account_id, category_id,
           original_transaction_id, name, note, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         transaction.id,
         transaction.kind,
         transaction.amount,
         transaction.occurredAt,
+        transaction.occurredAtPrecision,
         financialMonth,
         transaction.sourceAccountId ?? null,
         transaction.destinationAccountId ?? null,
@@ -233,6 +239,11 @@ function mapTransactionRow(row: TransactionRow): FinancialTransaction {
     kind: kind as TransactionKind,
     amount: createTwdAmount(row.amount),
     occurredAt: row.occurred_at,
+    occurredAtPrecision: assertMember(
+      row.occurred_at_precision,
+      ['date', 'datetime'] as const,
+      'occurredAtPrecision',
+    ) as FinancialTimePrecision,
     sourceAccountId: row.source_account_id ?? undefined,
     destinationAccountId: row.destination_account_id ?? undefined,
     categoryId: row.category_id ?? undefined,
@@ -245,7 +256,8 @@ function mapTransactionRow(row: TransactionRow): FinancialTransaction {
 }
 
 function selectTransactionColumns(): string {
-  return `SELECT id, kind, amount, occurred_at, source_account_id,
+  return `SELECT id, kind, amount, occurred_at, occurred_at_precision,
+                 source_account_id,
                  destination_account_id, category_id,
                  original_transaction_id, name, note,
                  created_at, updated_at`;

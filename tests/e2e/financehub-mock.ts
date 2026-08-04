@@ -387,6 +387,7 @@ function transactionFromDraft(
     id,
     ...draft,
     amount: createTwdAmount(draft.amount),
+    occurredAtPrecision: draft.occurredAtPrecision ?? 'datetime',
     name: draft.name.trim() || defaultName || draft.kind,
     note: draft.note.trim(),
     createdAt: timestamp,

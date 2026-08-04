@@ -77,7 +77,7 @@ describe('EncryptedBackupService', () => {
     const manifest = await service.createBackup();
     const directory = findBackupDirectory(backups, manifest.backupId)!;
     expect(await validateBackupDirectory(directory)).toEqual(manifest);
-    expect(manifest.databaseSchemaVersion).toBe(8);
+    expect(manifest.databaseSchemaVersion).toBe(11);
     expect(manifest.encryption).toEqual({ formatVersion: 1, kdfVersion: 1 });
 
     const restored = await openExistingEncryptedDatabase(

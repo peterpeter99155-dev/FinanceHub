@@ -9,16 +9,13 @@ import { Clock, systemClock } from './ports/clock';
 import type { FinancialItemRepository } from './ports/financial-item-repository';
 import type { TransactionRepository } from './ports/transaction-repository';
 import { toTransactionAccount } from '../domain/financial-item';
-import { applyCreditCardBalanceOperation } from '../domain/credit-card-balance';
 import {
   MAX_TRANSACTION_AMOUNT_TWD,
   MAX_TRANSACTION_NAME_LENGTH,
   MAX_TRANSACTION_NOTE_LENGTH,
   TRANSACTION_KINDS,
-  AccountBalanceEffect,
   FinancialTransaction,
   TransactionKind,
-  applyBalanceEffect,
   calculateAccountBalanceEffects,
   calculateMonthlyTransactionSummary,
   computeAccountBalanceEffects,
@@ -27,13 +24,11 @@ import {
 } from '../domain/transaction';
 import { createTwdAmount } from '../domain/money';
 import { financialMonthFromDateTime } from '../domain/financial-time';
-import type {
-  FinancialItem,
-} from '../domain/financial-item';
 import {
   TransactionDraft,
   TransactionMonthSnapshot,
 } from '../shared/transactions';
+import { applyTransactionEffects } from './transaction-balance-updater';
 
 const PAGE_SIZE = 50;
 
@@ -83,12 +78,14 @@ export class TransactionService {
       id: this.createId(),
       ...draft,
       amount: createTwdAmount(draft.amount),
+      occurredAtPrecision: draft.occurredAtPrecision ?? 'datetime',
       createdAt: now,
       updatedAt: now,
     };
 
     this.repository.runInTransaction(() => {
-      this.applyEffects(
+      applyTransactionEffects(
+        this.financialItems,
         calculateAccountBalanceEffects(
           transaction,
           this.validationOptions(transaction, now),
@@ -122,15 +119,18 @@ export class TransactionService {
       ...existing,
       ...draft,
       amount: createTwdAmount(draft.amount),
+      occurredAtPrecision: draft.occurredAtPrecision ?? 'datetime',
       updatedAt: now,
     };
 
     this.repository.runInTransaction(() => {
-      this.applyEffects(
+      applyTransactionEffects(
+        this.financialItems,
         computeAccountBalanceEffects(existing).map(reverseBalanceEffect),
         now,
       );
-      this.applyEffects(
+      applyTransactionEffects(
+        this.financialItems,
         calculateAccountBalanceEffects(
           replacement,
           this.validationOptions(replacement, now),
@@ -160,7 +160,8 @@ export class TransactionService {
         throw new Error(`Financial transaction "${id}" was not found.`);
       }
 
-      this.applyEffects(
+      applyTransactionEffects(
+        this.financialItems,
         computeAccountBalanceEffects(existing).map(reverseBalanceEffect),
         now,
       );
@@ -206,6 +207,8 @@ export class TransactionService {
       kind: kind as TransactionKind,
       amount,
       occurredAt,
+      occurredAtPrecision:
+        input.occurredAtPrecision === 'date' ? 'date' : 'datetime',
       sourceAccountId,
       destinationAccountId,
       categoryId,
@@ -263,29 +266,6 @@ export class TransactionService {
     return category;
   }
 
-  private applyEffects(
-    effects: readonly AccountBalanceEffect[],
-    updatedAt: string,
-  ): void {
-    for (const effect of effects) {
-      const item = this.financialItems.findById(effect.accountId);
-
-      if (!item) {
-        throw new Error(
-          `Transaction account "${effect.accountId}" was not found.`,
-        );
-      }
-
-      this.financialItems.update({
-        ...item,
-        ...(item.type === 'credit_card'
-          ? applyCreditCardEffect(item, effect)
-          : { amount: applyBalanceEffect(item.amount, effect) }),
-        updatedAt,
-      });
-    }
-  }
-
   private defaultName(
     kind: TransactionKind,
     categoryId: string | undefined,
@@ -308,27 +288,6 @@ export class TransactionService {
 
     return kind === 'income' ? '收入' : '支出';
   }
-}
-
-function applyCreditCardEffect(
-  item: FinancialItem,
-  effect: AccountBalanceEffect,
-): Pick<FinancialItem, 'amount' | 'overpaymentBalance'> {
-  const result = applyCreditCardBalanceOperation(
-    {
-      amountDue: item.amount,
-      overpaymentBalance: item.overpaymentBalance,
-    },
-    {
-      kind: effect.operation === 'increase' ? 'purchase' : 'refund',
-      amount: effect.amount,
-    },
-  );
-
-  return {
-    amount: result.amountDue,
-    overpaymentBalance: result.overpaymentBalance,
-  };
 }
 
 function parseMonth(

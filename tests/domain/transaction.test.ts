@@ -65,6 +65,7 @@ function transaction(
     kind: 'expense',
     amount: createTwdAmount(599),
     occurredAt: '2026-07-28T07:30:00.000Z',
+    occurredAtPrecision: 'datetime',
     sourceAccountId: 'bank-1',
     categoryId: 'communication',
     name: '',

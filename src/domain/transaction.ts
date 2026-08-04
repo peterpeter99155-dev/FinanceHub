@@ -1,4 +1,5 @@
 import type { FinancialCategory } from './category';
+import type { FinancialTimePrecision } from './import';
 import { financialMonthFromDateTime } from './financial-time';
 import type { TwdAmount } from './money';
 import { createTwdAmount } from './money';
@@ -43,6 +44,7 @@ export interface FinancialTransaction {
   readonly kind: TransactionKind;
   readonly amount: TwdAmount;
   readonly occurredAt: string;
+  readonly occurredAtPrecision: FinancialTimePrecision;
   readonly sourceAccountId?: string;
   readonly destinationAccountId?: string;
   readonly categoryId?: string;

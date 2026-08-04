@@ -3,11 +3,13 @@ import type {
   MonthlyTransactionSummary,
   TransactionKind,
 } from '../domain/transaction';
+import type { FinancialTimePrecision } from '../domain/import';
 
 export interface TransactionDraft {
   readonly kind: TransactionKind;
   readonly amount: number;
   readonly occurredAt: string;
+  readonly occurredAtPrecision?: FinancialTimePrecision;
   readonly sourceAccountId?: string;
   readonly destinationAccountId?: string;
   readonly categoryId?: string;

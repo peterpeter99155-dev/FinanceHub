@@ -295,6 +295,125 @@ const SPRINT_05_MIGRATIONS: readonly Migration[] = [
   },
 ] as const;
 
+const SPRINT_05_IMPORT_MIGRATIONS: readonly Migration[] = [
+  {
+    version: 9,
+    sql: `
+      ALTER TABLE financial_transactions
+        ADD COLUMN occurred_at_precision TEXT NOT NULL DEFAULT 'datetime'
+        CHECK (occurred_at_precision IN ('date', 'datetime'));
+    `,
+  },
+  {
+    version: 10,
+    sql: `
+      INSERT OR IGNORE INTO financial_categories (
+        id, kind, name, is_built_in, is_active
+      ) VALUES (
+        'expense-uncategorized', 'expense', '暫未分類', 1, 1
+      );
+    `,
+  },
+  {
+    version: 11,
+    sql: `
+      CREATE TABLE import_batches (
+        id TEXT PRIMARY KEY,
+        source_type TEXT NOT NULL,
+        source_file_digest TEXT NOT NULL UNIQUE,
+        statement_month TEXT NOT NULL CHECK (
+          statement_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+        ),
+        credit_card_account_id TEXT NOT NULL,
+        imported_at TEXT NOT NULL,
+        parser_name TEXT NOT NULL,
+        parser_version TEXT NOT NULL,
+        statement_detail_total INTEGER NOT NULL CHECK (
+          statement_detail_total BETWEEN -999999999999 AND 999999999999
+        ),
+        parsed_detail_total INTEGER NOT NULL CHECK (
+          parsed_detail_total BETWEEN -999999999999 AND 999999999999
+        ),
+        FOREIGN KEY (credit_card_account_id)
+          REFERENCES financial_items (id) ON DELETE RESTRICT
+      );
+
+      CREATE TABLE source_observations (
+        id TEXT PRIMARY KEY,
+        batch_id TEXT NOT NULL,
+        observation_fingerprint TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK (
+          kind IN ('credit_card_purchase', 'credit_card_refund')
+        ),
+        amount INTEGER NOT NULL CHECK (
+          amount > 0 AND amount <= 999999999999
+        ),
+        occurred_at TEXT NOT NULL,
+        occurred_at_precision TEXT NOT NULL CHECK (
+          occurred_at_precision IN ('date', 'datetime')
+        ),
+        summary TEXT NOT NULL CHECK (length(trim(summary)) <= 200),
+        page_number INTEGER NOT NULL CHECK (page_number > 0),
+        anonymous_row_locator TEXT NOT NULL,
+        warning_codes TEXT NOT NULL,
+        FOREIGN KEY (batch_id)
+          REFERENCES import_batches (id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE import_candidates (
+        id TEXT PRIMARY KEY,
+        batch_id TEXT NOT NULL,
+        observation_id TEXT NOT NULL UNIQUE,
+        kind TEXT NOT NULL CHECK (
+          kind IN ('credit_card_purchase', 'credit_card_refund')
+        ),
+        amount INTEGER NOT NULL CHECK (
+          amount > 0 AND amount <= 999999999999
+        ),
+        occurred_at TEXT NOT NULL,
+        occurred_at_precision TEXT NOT NULL CHECK (
+          occurred_at_precision IN ('date', 'datetime')
+        ),
+        name TEXT NOT NULL CHECK (length(trim(name)) <= 50),
+        credit_card_account_id TEXT NOT NULL,
+        category_id TEXT,
+        decision TEXT CHECK (
+          decision IN ('create_new', 'link_existing', 'exclude')
+        ),
+        transaction_id TEXT,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (batch_id)
+          REFERENCES import_batches (id) ON DELETE CASCADE,
+        FOREIGN KEY (observation_id)
+          REFERENCES source_observations (id) ON DELETE CASCADE,
+        FOREIGN KEY (credit_card_account_id)
+          REFERENCES financial_items (id) ON DELETE RESTRICT,
+        FOREIGN KEY (category_id)
+          REFERENCES financial_categories (id) ON DELETE RESTRICT,
+        FOREIGN KEY (transaction_id)
+          REFERENCES financial_transactions (id) ON DELETE SET NULL
+      );
+
+      CREATE TABLE transaction_source_links (
+        observation_id TEXT PRIMARY KEY,
+        transaction_id TEXT NOT NULL,
+        linked_at TEXT NOT NULL,
+        FOREIGN KEY (observation_id)
+          REFERENCES source_observations (id) ON DELETE CASCADE,
+        FOREIGN KEY (transaction_id)
+          REFERENCES financial_transactions (id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX source_observations_fingerprint_idx
+        ON source_observations (observation_fingerprint);
+      CREATE INDEX import_candidates_batch_decision_idx
+        ON import_candidates (batch_id, decision, id);
+      CREATE INDEX transaction_source_links_transaction_idx
+        ON transaction_source_links (transaction_id);
+    `,
+  },
+] as const;
+
 export interface BootstrapDatabase {
   readonly database: SqliteDatabase;
   close(): void;
@@ -338,6 +457,7 @@ export function bootstrapDatabaseConnection(
   for (const migration of [
     ...MIGRATIONS,
     ...SPRINT_05_MIGRATIONS,
+    ...SPRINT_05_IMPORT_MIGRATIONS,
   ]) {
     applyMigration(database, migration);
   }

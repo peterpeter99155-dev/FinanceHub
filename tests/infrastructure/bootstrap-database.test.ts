@@ -32,7 +32,7 @@ describe('openBootstrapDatabase', () => {
     }[];
 
     expect(migrations.map(({ version }) => version)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
     ]);
     for (const migration of migrations) {
       expect(migration.applied_at).toMatch(
@@ -117,6 +117,29 @@ describe('openBootstrapDatabase', () => {
     );
   });
 
+  it('keeps released Sprint 05 financial migrations immutable', () => {
+    const source = readFileSync(
+      path.resolve(
+        'src',
+        'infrastructure',
+        'database',
+        'bootstrap-database.ts',
+      ),
+      'utf8',
+    );
+    const start = source.indexOf('const SPRINT_05_MIGRATIONS:');
+    const end = source.indexOf('] as const;', start) + 11;
+    const migrationBlock = source
+      .slice(start, end)
+      .replace(/\r\n/g, '\n');
+
+    expect(
+      createHash('sha256').update(migrationBlock).digest('hex'),
+    ).toBe(
+      'b95fe10a2e6802a50faabcb7d0dd6d57f80e2427e3f6322efad7e104d9c90370',
+    );
+  });
+
   it('can reopen the same database without reapplying migrations or losing data', () => {
     const directory = mkdtempSync(
       path.join(tmpdir(), 'financehub-migration-repeat-'),
@@ -147,7 +170,7 @@ describe('openBootstrapDatabase', () => {
         .get() as { count: number };
 
       expect(item).toEqual({ name: '測試現金', amount: 1000 });
-      expect(Number(count.count)).toBe(8);
+      expect(Number(count.count)).toBe(11);
     } finally {
       connection?.close();
       connection = undefined;
@@ -208,6 +231,10 @@ describe('openBootstrapDatabase', () => {
       connection.database.exec(`
         DROP TRIGGER financial_items_credit_card_balance_insert;
         DROP TRIGGER financial_items_credit_card_balance_update;
+        DROP TABLE transaction_source_links;
+        DROP TABLE import_candidates;
+        DROP TABLE source_observations;
+        DROP TABLE import_batches;
         DROP TABLE financial_transactions;
         CREATE TABLE financial_transactions (
           id TEXT PRIMARY KEY,
@@ -229,7 +256,7 @@ describe('openBootstrapDatabase', () => {
           updated_at TEXT NOT NULL
         );
         ALTER TABLE financial_items DROP COLUMN overpayment_amount;
-        DELETE FROM schema_migrations WHERE version IN (7, 8);
+        DELETE FROM schema_migrations WHERE version IN (7, 8, 9, 10, 11);
         INSERT INTO financial_items (
           id, name, direction, type, amount, status, updated_at,
           is_active, include_in_net_worth
@@ -255,7 +282,47 @@ describe('openBootstrapDatabase', () => {
         connection.database
           .prepare('SELECT MAX(version) AS version FROM schema_migrations')
           .get(),
-      ).toEqual({ version: 8 });
+      ).toEqual({ version: 11 });
+    } finally {
+      connection?.close();
+      connection = undefined;
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('marks existing transactions as datetime when time precision is introduced', () => {
+    const directory = mkdtempSync(
+      path.join(tmpdir(), 'financehub-time-precision-upgrade-'),
+    );
+    const databasePath = path.join(directory, 'financehub.db');
+
+    try {
+      connection = openBootstrapDatabase(databasePath);
+      connection.database.exec(`
+        INSERT INTO financial_transactions (
+          id, kind, amount, occurred_at, occurred_at_precision,
+          financial_month, name, note, created_at, updated_at
+        ) VALUES (
+          'legacy-transaction', 'expense', 100,
+          '2026-07-28T08:00:00.000Z', 'datetime', '2026-07',
+          'Legacy transaction', '',
+          '2026-07-28T08:00:00.000Z', '2026-07-28T08:00:00.000Z'
+        );
+        ALTER TABLE financial_transactions DROP COLUMN occurred_at_precision;
+        DELETE FROM schema_migrations WHERE version = 9;
+      `);
+      connection.close();
+
+      connection = openBootstrapDatabase(databasePath);
+      expect(
+        connection.database
+          .prepare(`
+            SELECT occurred_at_precision
+            FROM financial_transactions
+            WHERE id = 'legacy-transaction'
+          `)
+          .get(),
+      ).toEqual({ occurred_at_precision: 'datetime' });
     } finally {
       connection?.close();
       connection = undefined;
