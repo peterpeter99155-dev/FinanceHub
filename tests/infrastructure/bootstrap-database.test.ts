@@ -32,7 +32,7 @@ describe('openBootstrapDatabase', () => {
     }[];
 
     expect(migrations.map(({ version }) => version)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
     ]);
     for (const migration of migrations) {
       expect(migration.applied_at).toMatch(
@@ -140,6 +140,36 @@ describe('openBootstrapDatabase', () => {
     );
   });
 
+  it('keeps released Sprint 05 import migrations immutable', () => {
+    const source = readFileSync(
+      path.resolve('src', 'infrastructure', 'database', 'bootstrap-database.ts'),
+      'utf8',
+    );
+    const start = source.indexOf('const SPRINT_05_IMPORT_MIGRATIONS:');
+    const end = source.indexOf('] as const;', start) + 11;
+    const migrationBlock = source.slice(start, end).replace(/\r\n/g, '\n');
+
+    expect(createHash('sha256').update(migrationBlock).digest('hex')).toBe(
+      '2aadf0017dfe99eb80e0fd17d989e7e8e3070c4a153eb3a82933f02fe822d809',
+    );
+  });
+
+  it('locks the migration 12 unresolved-import schema definition', () => {
+    const source = readFileSync(
+      path.resolve('src', 'infrastructure', 'database', 'bootstrap-database.ts'),
+      'utf8',
+    );
+    const start = source.indexOf(
+      'const SPRINT_05_IMPORT_REVIEW_MIGRATIONS:',
+    );
+    const end = source.indexOf('] as const;', start) + 11;
+    const migrationBlock = source.slice(start, end).replace(/\r\n/g, '\n');
+
+    expect(createHash('sha256').update(migrationBlock).digest('hex')).toBe(
+      'faee7f4a718c51ab6a213854b49b7d9b0b7efaf3f4fe62cc12ec574cb1fcf284',
+    );
+  });
+
   it('can reopen the same database without reapplying migrations or losing data', () => {
     const directory = mkdtempSync(
       path.join(tmpdir(), 'financehub-migration-repeat-'),
@@ -170,7 +200,69 @@ describe('openBootstrapDatabase', () => {
         .get() as { count: number };
 
       expect(item).toEqual({ name: '測試現金', amount: 1000 });
-      expect(Number(count.count)).toBe(11);
+      expect(Number(count.count)).toBe(12);
+    } finally {
+      connection?.close();
+      connection = undefined;
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('migration 12 preserves existing import rows and backfills statement effect', () => {
+    const directory = mkdtempSync(
+      path.join(tmpdir(), 'financehub-import-v12-upgrade-'),
+    );
+    const databasePath = path.join(directory, 'financehub.db');
+
+    try {
+      connection = openBootstrapDatabase(databasePath);
+      connection.database.exec(`
+        INSERT INTO financial_items (
+          id, name, direction, type, amount, overpayment_amount, status,
+          updated_at, is_active, include_in_net_worth
+        ) VALUES (
+          'legacy-card', 'Legacy card', 'liability', 'credit_card', 30, 0,
+          'confirmed', '2026-08-04T08:00:00.000Z', 1, 1
+        );
+        INSERT INTO import_batches VALUES (
+          'batch-1', 'credit_card_statement_pdf', '${'a'.repeat(64)}',
+          '2026-07', 'legacy-card', '2026-08-04T08:00:00.000Z',
+          'legacy-parser', '1.0.0', -30, -30
+        );
+        INSERT INTO source_observations VALUES (
+          'observation-1', 'batch-1', '${'b'.repeat(64)}',
+          'credit_card_refund', 30, -30, '2026-07-10T04:00:00.000Z',
+          'date', 'Legacy refund', 2, 'page-2-y-100', '[]'
+        );
+        INSERT INTO import_candidates VALUES (
+          'candidate-1', 'batch-1', 'observation-1',
+          'credit_card_refund', 30, '2026-07-10T04:00:00.000Z', 'date',
+          'Legacy refund', 'legacy-card', NULL, NULL, NULL,
+          '2026-08-04T08:00:00.000Z'
+        );
+        DELETE FROM schema_migrations WHERE version = 12;
+      `);
+      connection.close();
+      connection = openBootstrapDatabase(databasePath);
+
+      expect(connection.database.prepare(`
+        SELECT kind, amount, statement_effect
+        FROM source_observations WHERE id = 'observation-1'
+      `).get()).toEqual({
+        kind: 'credit_card_refund',
+        amount: 30,
+        statement_effect: -30,
+      });
+      expect(connection.database.prepare(`
+        SELECT kind, amount, decision
+        FROM import_candidates WHERE id = 'candidate-1'
+      `).get()).toEqual({
+        kind: 'credit_card_refund',
+        amount: 30,
+        decision: null,
+      });
+      expect(connection.database.prepare('PRAGMA foreign_key_check').all())
+        .toEqual([]);
     } finally {
       connection?.close();
       connection = undefined;
@@ -282,7 +374,7 @@ describe('openBootstrapDatabase', () => {
         connection.database
           .prepare('SELECT MAX(version) AS version FROM schema_migrations')
           .get(),
-      ).toEqual({ version: 11 });
+      ).toEqual({ version: 12 });
     } finally {
       connection?.close();
       connection = undefined;

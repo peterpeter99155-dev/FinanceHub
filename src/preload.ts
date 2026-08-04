@@ -23,6 +23,9 @@ import {
   type IpcResult,
 } from './shared/ipc-result';
 import type { BackupStatus } from './shared/backups';
+import type { ImportsApi } from './shared/imports';
+import type { CandidateDecision } from './domain/import';
+import type { ImportCandidateUpdate } from './application/import-service';
 
 async function invoke<T>(
   channel: string,
@@ -190,6 +193,47 @@ const financeHubApi: FinanceHubApi = Object.freeze({
     exportLatest: () =>
       invoke<'exported' | 'cancelled'>(
         IPC_CHANNELS.exportLatestBackup,
+      ),
+  }),
+  imports: Object.freeze({
+    selectStatementFile: () =>
+      invoke<Awaited<ReturnType<ImportsApi['selectStatementFile']>>>(
+        IPC_CHANNELS.selectImportStatement,
+      ),
+    parseSelectedStatement: (
+      selectionToken: string,
+      pdfPassword: string,
+      creditCardAccountId: string,
+    ) => invoke<Awaited<ReturnType<ImportsApi['parseSelectedStatement']>>>(
+      IPC_CHANNELS.parseSelectedImportStatement,
+      selectionToken,
+      pdfPassword,
+      creditCardAccountId,
+    ),
+    getBatch: (id: string) =>
+      invoke<Awaited<ReturnType<ImportsApi['getBatch']>>>(
+        IPC_CHANNELS.getImportBatch,
+        id,
+      ),
+    updateCandidate: (id: string, update: ImportCandidateUpdate) =>
+      invoke<Awaited<ReturnType<ImportsApi['updateCandidate']>>>(
+        IPC_CHANNELS.updateImportCandidate,
+        id,
+        update,
+      ),
+    confirmCandidates: (
+      batchId: string,
+      decisions: readonly CandidateDecision[],
+    ) =>
+      invoke<Awaited<ReturnType<ImportsApi['confirmCandidates']>>>(
+        IPC_CHANNELS.confirmImportCandidates,
+        batchId,
+        decisions,
+      ),
+    excludeBatch: (batchId: string) =>
+      invoke<Awaited<ReturnType<ImportsApi['excludeBatch']>>>(
+        IPC_CHANNELS.excludeImportBatch,
+        batchId,
       ),
   }),
 });

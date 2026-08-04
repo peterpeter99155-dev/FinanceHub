@@ -5,6 +5,7 @@ import type {
 } from './management';
 import type { TransactionsApi } from './transactions';
 import type { BackupsApi } from './backups';
+import type { ImportsApi } from './imports';
 
 export const IPC_CHANNELS = {
   getBootstrapStatus: 'app:get-bootstrap-status',
@@ -33,6 +34,12 @@ export const IPC_CHANNELS = {
   setBackupRetentionCount: 'backups:set-retention-count',
   openBackupDirectory: 'backups:open-directory',
   exportLatestBackup: 'backups:export-latest',
+  selectImportStatement: 'imports:select-statement',
+  parseSelectedImportStatement: 'imports:parse-selected-statement',
+  getImportBatch: 'imports:get-batch',
+  updateImportCandidate: 'imports:update-candidate',
+  confirmImportCandidates: 'imports:confirm-candidates',
+  excludeImportBatch: 'imports:exclude-batch',
 } as const;
 
 export interface BootstrapStatus {
@@ -53,4 +60,5 @@ export interface FinanceHubApi {
   financialItemCustomTypes: FinancialItemCustomTypesApi;
   transactions: TransactionsApi;
   backups: BackupsApi;
+  imports: ImportsApi;
 }

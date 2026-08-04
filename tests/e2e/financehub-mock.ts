@@ -281,6 +281,24 @@ function createApi(
         return [...state.customTypes];
       },
     },
+    imports: {
+      selectStatementFile: async () => ({ status: 'cancelled' }),
+      parseSelectedStatement: async () => {
+        throw new Error('Import UI is not implemented in this stage.');
+      },
+      getBatch: async () => {
+        throw new Error('Import UI is not implemented in this stage.');
+      },
+      updateCandidate: async () => {
+        throw new Error('Import UI is not implemented in this stage.');
+      },
+      confirmCandidates: async () => {
+        throw new Error('Import UI is not implemented in this stage.');
+      },
+      excludeBatch: async () => {
+        throw new Error('Import UI is not implemented in this stage.');
+      },
+    },
     transactions: {
       listMonth: async (year, month, offset = 0) =>
         transactionSnapshot(state, year, month, offset),

@@ -204,7 +204,10 @@ export class ImportService {
 
     const transactionId =
       decision.decision === 'create_new'
-        ? this.createTransaction(candidate, now)
+        ? this.createTransaction(
+          this.requireCreatableCandidate(candidate),
+          now,
+        )
         : this.requireExistingTransactionId(decision);
     this.imports.createSourceLink({
       observationId: candidate.observationId,
@@ -220,7 +223,7 @@ export class ImportService {
   }
 
   private createTransaction(
-    candidate: ImportCandidate,
+    candidate: ImportCandidate & { readonly kind: ImportTransactionKind },
     now: string,
   ): string {
     const categoryId = candidate.categoryId ?? UNCATEGORIZED_EXPENSE_ID;
@@ -261,6 +264,20 @@ export class ImportService {
       financialMonthFromDateTime(transaction.occurredAt),
     );
     return transaction.id;
+  }
+
+  private requireCreatableCandidate(
+    candidate: ImportCandidate,
+  ): ImportCandidate & { readonly kind: ImportTransactionKind } {
+    if (!candidate.kind || candidate.amount <= 0) {
+      throw new FinanceHubError(
+        ERROR_CODES.importCandidateUnavailable,
+        '待確認項目必須先指定交易類型與有效金額。',
+      );
+    }
+    return candidate as ImportCandidate & {
+      readonly kind: ImportTransactionKind;
+    };
   }
 
   private requireExistingTransactionId(
@@ -345,15 +362,26 @@ export class ImportService {
         observation.pageNumber < 1 ||
         observation.warningCodes.some(
           (code) => !/^[A-Z0-9_]{1,64}$/.test(code),
-        )
+        ) ||
+        !Number.isSafeInteger(observation.statementEffect) ||
+        observation.amount !== Math.abs(observation.statementEffect)
       ) {
         throw new Error('Parsed observation metadata is invalid.');
       }
-      this.validateCandidateUpdate({
-        ...observation,
-        name: observation.summary,
-        creditCardAccountId: parsed.creditCardAccountId,
-      });
+      if (observation.kind) {
+        this.validateCandidateUpdate({
+          ...observation,
+          kind: observation.kind,
+          name: observation.summary,
+          creditCardAccountId: parsed.creditCardAccountId,
+        });
+      } else if (
+        observation.amount < 0 ||
+        observation.amount > MAX_TRANSACTION_AMOUNT_TWD ||
+        Number.isNaN(Date.parse(observation.occurredAt))
+      ) {
+        throw new Error('Unresolved parsed observation is invalid.');
+      }
     }
   }
 

@@ -31,7 +31,7 @@ interface CandidateRow {
   id: string;
   batch_id: string;
   observation_id: string;
-  kind: ImportTransactionKind;
+  kind: ImportTransactionKind | null;
   amount: number;
   occurred_at: string;
   occurred_at_precision: FinancialTimePrecision;
@@ -47,8 +47,9 @@ interface ObservationRow {
   id: string;
   batch_id: string;
   observation_fingerprint: string;
-  kind: ImportTransactionKind;
+  kind: ImportTransactionKind | null;
   amount: number;
+  statement_effect: number;
   occurred_at: string;
   occurred_at_precision: FinancialTimePrecision;
   summary: string;
@@ -106,18 +107,20 @@ export class SqliteImportRepository implements ImportRepository {
 
     const insertObservation = this.database.prepare(`
       INSERT INTO source_observations (
-        id, batch_id, observation_fingerprint, kind, amount, occurred_at,
+        id, batch_id, observation_fingerprint, kind, amount,
+        statement_effect, occurred_at,
         occurred_at_precision, summary, page_number,
         anonymous_row_locator, warning_codes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const observation of graph.observations) {
       insertObservation.run(
         observation.id,
         observation.batchId,
         observation.observationFingerprint,
-        observation.kind,
+        observation.kind ?? null,
         observation.amount,
+        observation.statementEffect,
         observation.occurredAt,
         observation.occurredAtPrecision,
         observation.summary,
@@ -163,6 +166,7 @@ export class SqliteImportRepository implements ImportRepository {
     const rows = this.database
       .prepare(`
         SELECT id, batch_id, observation_fingerprint, kind, amount,
+               statement_effect,
                occurred_at, occurred_at_precision, summary, page_number,
                anonymous_row_locator, warning_codes
         FROM source_observations
@@ -194,7 +198,7 @@ export class SqliteImportRepository implements ImportRepository {
         WHERE id = ? AND decision IS NULL
       `)
       .run(
-        candidate.kind,
+        candidate.kind ?? null,
         candidate.amount,
         candidate.occurredAt,
         candidate.occurredAtPrecision,
@@ -255,7 +259,7 @@ function candidateParameters(candidate: ImportCandidate): unknown[] {
     candidate.id,
     candidate.batchId,
     candidate.observationId,
-    candidate.kind,
+    candidate.kind ?? null,
     candidate.amount,
     candidate.occurredAt,
     candidate.occurredAtPrecision,
@@ -294,7 +298,7 @@ function mapCandidate(row: CandidateRow): ImportCandidate {
     id: row.id,
     batchId: row.batch_id,
     observationId: row.observation_id,
-    kind: row.kind,
+    kind: row.kind ?? undefined,
     amount: Number(row.amount),
     occurredAt: row.occurred_at,
     occurredAtPrecision: row.occurred_at_precision,
@@ -319,8 +323,9 @@ function mapObservation(row: ObservationRow): SourceObservation {
     id: row.id,
     batchId: row.batch_id,
     observationFingerprint: row.observation_fingerprint,
-    kind: row.kind,
+    kind: row.kind ?? undefined,
     amount: Number(row.amount),
+    statementEffect: Number(row.statement_effect),
     occurredAt: row.occurred_at,
     occurredAtPrecision: row.occurred_at_precision,
     summary: row.summary,

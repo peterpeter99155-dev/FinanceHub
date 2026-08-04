@@ -414,6 +414,123 @@ const SPRINT_05_IMPORT_MIGRATIONS: readonly Migration[] = [
   },
 ] as const;
 
+const SPRINT_05_IMPORT_REVIEW_MIGRATIONS: readonly Migration[] = [
+  {
+    version: 12,
+    sql: `
+      CREATE TABLE source_observations_v12 (
+        id TEXT PRIMARY KEY,
+        batch_id TEXT NOT NULL,
+        observation_fingerprint TEXT NOT NULL,
+        kind TEXT CHECK (
+          kind IN ('credit_card_purchase', 'credit_card_refund')
+        ),
+        amount INTEGER NOT NULL CHECK (
+          amount >= 0 AND amount <= 999999999999
+        ),
+        statement_effect INTEGER NOT NULL CHECK (
+          statement_effect BETWEEN -999999999999 AND 999999999999
+          AND amount = abs(statement_effect)
+        ),
+        occurred_at TEXT NOT NULL,
+        occurred_at_precision TEXT NOT NULL CHECK (
+          occurred_at_precision IN ('date', 'datetime')
+        ),
+        summary TEXT NOT NULL CHECK (length(trim(summary)) <= 200),
+        page_number INTEGER NOT NULL CHECK (page_number > 0),
+        anonymous_row_locator TEXT NOT NULL,
+        warning_codes TEXT NOT NULL,
+        FOREIGN KEY (batch_id)
+          REFERENCES import_batches (id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE import_candidates_v12 (
+        id TEXT PRIMARY KEY,
+        batch_id TEXT NOT NULL,
+        observation_id TEXT NOT NULL UNIQUE,
+        kind TEXT CHECK (
+          kind IN ('credit_card_purchase', 'credit_card_refund')
+        ),
+        amount INTEGER NOT NULL CHECK (
+          amount >= 0 AND amount <= 999999999999
+        ),
+        occurred_at TEXT NOT NULL,
+        occurred_at_precision TEXT NOT NULL CHECK (
+          occurred_at_precision IN ('date', 'datetime')
+        ),
+        name TEXT NOT NULL CHECK (length(trim(name)) <= 50),
+        credit_card_account_id TEXT NOT NULL,
+        category_id TEXT,
+        decision TEXT CHECK (
+          decision IN ('create_new', 'link_existing', 'exclude')
+        ),
+        transaction_id TEXT,
+        updated_at TEXT NOT NULL,
+        CHECK (
+          decision IS NULL OR decision <> 'create_new'
+          OR (kind IS NOT NULL AND amount > 0)
+        ),
+        FOREIGN KEY (batch_id)
+          REFERENCES import_batches (id) ON DELETE CASCADE,
+        FOREIGN KEY (observation_id)
+          REFERENCES source_observations_v12 (id) ON DELETE CASCADE,
+        FOREIGN KEY (credit_card_account_id)
+          REFERENCES financial_items (id) ON DELETE RESTRICT,
+        FOREIGN KEY (category_id)
+          REFERENCES financial_categories (id) ON DELETE RESTRICT,
+        FOREIGN KEY (transaction_id)
+          REFERENCES financial_transactions (id) ON DELETE SET NULL
+      );
+
+      CREATE TABLE transaction_source_links_v12 (
+        observation_id TEXT PRIMARY KEY,
+        transaction_id TEXT NOT NULL,
+        linked_at TEXT NOT NULL,
+        FOREIGN KEY (observation_id)
+          REFERENCES source_observations_v12 (id) ON DELETE CASCADE,
+        FOREIGN KEY (transaction_id)
+          REFERENCES financial_transactions (id) ON DELETE CASCADE
+      );
+
+      INSERT INTO source_observations_v12 (
+        id, batch_id, observation_fingerprint, kind, amount,
+        statement_effect, occurred_at, occurred_at_precision, summary,
+        page_number, anonymous_row_locator, warning_codes
+      )
+      SELECT id, batch_id, observation_fingerprint, kind, amount,
+             CASE kind
+               WHEN 'credit_card_refund' THEN -amount
+               ELSE amount
+             END,
+             occurred_at, occurred_at_precision, summary, page_number,
+             anonymous_row_locator, warning_codes
+      FROM source_observations;
+
+      INSERT INTO import_candidates_v12
+      SELECT * FROM import_candidates;
+
+      INSERT INTO transaction_source_links_v12
+      SELECT * FROM transaction_source_links;
+
+      DROP TABLE transaction_source_links;
+      DROP TABLE import_candidates;
+      DROP TABLE source_observations;
+
+      ALTER TABLE source_observations_v12 RENAME TO source_observations;
+      ALTER TABLE import_candidates_v12 RENAME TO import_candidates;
+      ALTER TABLE transaction_source_links_v12
+        RENAME TO transaction_source_links;
+
+      CREATE INDEX source_observations_fingerprint_idx
+        ON source_observations (observation_fingerprint);
+      CREATE INDEX import_candidates_batch_decision_idx
+        ON import_candidates (batch_id, decision, id);
+      CREATE INDEX transaction_source_links_transaction_idx
+        ON transaction_source_links (transaction_id);
+    `,
+  },
+] as const;
+
 export interface BootstrapDatabase {
   readonly database: SqliteDatabase;
   close(): void;
@@ -458,6 +575,7 @@ export function bootstrapDatabaseConnection(
     ...MIGRATIONS,
     ...SPRINT_05_MIGRATIONS,
     ...SPRINT_05_IMPORT_MIGRATIONS,
+    ...SPRINT_05_IMPORT_REVIEW_MIGRATIONS,
   ]) {
     applyMigration(database, migration);
   }

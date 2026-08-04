@@ -6,6 +6,7 @@ import {
   shell,
 } from 'electron';
 import path from 'node:path';
+import { readFile, stat } from 'node:fs/promises';
 
 import {
   ApplicationController,
@@ -13,6 +14,7 @@ import {
 } from './infrastructure/main/application-controller';
 import { toIpcResult } from './shared/ipc-result';
 import { ERROR_CODES, FinanceHubError } from './shared/errors';
+import { PDF_PARSE_LIMITS } from './infrastructure/pdf/sinopac-statement-parser';
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
@@ -81,6 +83,27 @@ void app.whenReady().then(() => {
         properties: ['openDirectory', 'createDirectory'],
       });
       return selection.canceled ? undefined : selection.filePaths[0];
+    },
+    async () => {
+      const selection = await dialog.showOpenDialog({
+        title: '選擇信用卡月結帳單',
+        buttonLabel: '選擇 PDF',
+        properties: ['openFile'],
+        filters: [{ name: 'PDF 帳單', extensions: ['pdf'] }],
+      });
+      if (selection.canceled || !selection.filePaths[0]) return undefined;
+      const selectedPath = selection.filePaths[0];
+      const selectedFile = await stat(selectedPath);
+      if (!selectedFile.isFile() || selectedFile.size > PDF_PARSE_LIMITS.maxFileBytes) {
+        throw new FinanceHubError(
+          ERROR_CODES.pdfFileTooLarge,
+          'PDF 檔案超過可匯入的大小上限。',
+        );
+      }
+      return {
+        path: selectedPath,
+        content: new Uint8Array(await readFile(selectedPath)),
+      };
     },
   );
   controller.registerLockedHandlers();

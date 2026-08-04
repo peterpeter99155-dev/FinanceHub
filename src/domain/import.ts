@@ -15,8 +15,9 @@ export type ImportTransactionKind =
 
 export interface ParsedImportObservation {
   readonly observationFingerprint: string;
-  readonly kind: ImportTransactionKind;
+  readonly kind?: ImportTransactionKind;
   readonly amount: number;
+  readonly statementEffect: number;
   readonly occurredAt: string;
   readonly occurredAtPrecision: FinancialTimePrecision;
   readonly summary: string;
@@ -58,7 +59,7 @@ export interface ImportCandidate {
   readonly id: string;
   readonly batchId: string;
   readonly observationId: string;
-  readonly kind: ImportTransactionKind;
+  readonly kind?: ImportTransactionKind;
   readonly amount: number;
   readonly occurredAt: string;
   readonly occurredAtPrecision: FinancialTimePrecision;
@@ -85,14 +86,12 @@ export interface CandidateDecision {
 export function calculateStatementDetailTotal(
   observations: readonly Pick<
     ParsedImportObservation,
-    'kind' | 'amount'
+    'statementEffect'
   >[],
 ): number {
   let total = 0;
   for (const observation of observations) {
-    const direction =
-      observation.kind === 'credit_card_refund' ? -1 : 1;
-    total += direction * observation.amount;
+    total += observation.statementEffect;
     if (!Number.isSafeInteger(total)) {
       throw new Error('Statement detail total exceeds the supported range.');
     }

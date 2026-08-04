@@ -4,6 +4,7 @@ import path from 'node:path';
 import { FinancialItemCustomTypeService } from '../../application/financial-item-custom-type-service';
 import { FinancialItemService } from '../../application/financial-item-service';
 import { TransactionService } from '../../application/transaction-service';
+import { ImportService } from '../../application/import-service';
 import {
   type BootstrapStatus,
   IPC_CHANNELS,
@@ -17,6 +18,12 @@ import { SqliteCategoryRepository } from '../database/sqlite-category-repository
 import { SqliteFinancialItemCustomTypeRepository } from '../database/sqlite-financial-item-custom-type-repository';
 import { SqliteFinancialItemRepository } from '../database/sqlite-financial-item-repository';
 import { SqliteTransactionRepository } from '../database/sqlite-transaction-repository';
+import { SqliteImportRepository } from '../database/sqlite-import-repository';
+import { SinopacStatementParser } from '../pdf/sinopac-statement-parser';
+import {
+  PdfImportSession,
+  type PdfFileSelector,
+} from '../pdf/pdf-import-session';
 import {
   databasePaths,
   inspectDatabaseFiles,
@@ -36,6 +43,7 @@ interface FinancialServices {
   readonly categories: CategoryService;
   readonly customTypes: FinancialItemCustomTypeService;
   readonly transactions: TransactionService;
+  readonly imports: ImportService;
 }
 
 type DatabaseOpener = (
@@ -66,6 +74,8 @@ export class ApplicationController {
     private readonly openDirectory: DirectoryOpener =
       async () => undefined,
     private readonly selectExportDirectory: ExportDirectorySelector =
+      async () => undefined,
+    private readonly selectImportFile: PdfFileSelector =
       async () => undefined,
   ) {}
 
@@ -138,6 +148,10 @@ export class ApplicationController {
         systemClock,
         writeGate,
       );
+      const importSession = new PdfImportSession(
+        services.imports,
+        this.selectImportFile,
+      );
       registerFinancialHandlers(
         this.registry,
         services,
@@ -150,6 +164,7 @@ export class ApplicationController {
           await backups.exportLatest(destination);
           return 'exported';
         },
+        importSession,
       );
       this.connection = connection;
       this.writeGate = writeGate;
@@ -194,6 +209,7 @@ function createFinancialServices(
   const transactions = new SqliteTransactionRepository(
     connection.database,
   );
+  const imports = new SqliteImportRepository(connection.database);
 
   return {
     financialItems: new FinancialItemService(
@@ -213,6 +229,13 @@ function createFinancialServices(
       categories,
       financialItems,
     ),
+    imports: new ImportService(
+      new SinopacStatementParser(),
+      imports,
+      transactions,
+      financialItems,
+      categories,
+    ),
   };
 }
 
@@ -223,6 +246,7 @@ function registerFinancialHandlers(
   backups: BackupService,
   openBackupDirectory: () => Promise<void>,
   exportLatestBackup: () => Promise<'exported' | 'cancelled'>,
+  importSession: PdfImportSession,
 ): void {
   registry.handle(IPC_CHANNELS.listFinancialItems, () =>
     services.financialItems.list(),
@@ -350,5 +374,59 @@ function registerFinancialHandlers(
   registry.handle(
     IPC_CHANNELS.exportLatestBackup,
     exportLatestBackup,
+  );
+  registry.handle(IPC_CHANNELS.selectImportStatement, () =>
+    importSession.selectStatementFile(),
+  );
+  registry.handle(
+    IPC_CHANNELS.parseSelectedImportStatement,
+    (selectionToken: unknown, pdfPassword: unknown, accountId: unknown) =>
+      writeGate.runWrite(() =>
+        importSession.parseSelectedStatement(
+          selectionToken,
+          pdfPassword,
+          accountId,
+        ),
+      ),
+  );
+  registry.handle(IPC_CHANNELS.getImportBatch, (id: unknown) => {
+    if (typeof id !== 'string') throw invalidImportInput();
+    return services.imports.getBatch(id);
+  });
+  registry.handle(
+    IPC_CHANNELS.updateImportCandidate,
+    (id: unknown, update: unknown) => {
+      if (typeof id !== 'string' || typeof update !== 'object' || !update) {
+        throw invalidImportInput();
+      }
+      return writeGate.runWrite(() =>
+        services.imports.updateCandidate(
+          id,
+          update as Parameters<ImportService['updateCandidate']>[1],
+        ),
+      );
+    },
+  );
+  registry.handle(
+    IPC_CHANNELS.confirmImportCandidates,
+    (batchId: unknown, decisions: unknown) => {
+      if (typeof batchId !== 'string' || !Array.isArray(decisions)) {
+        throw invalidImportInput();
+      }
+      return writeGate.runWrite(() =>
+        services.imports.confirmCandidates(batchId, decisions),
+      );
+    },
+  );
+  registry.handle(IPC_CHANNELS.excludeImportBatch, (batchId: unknown) => {
+    if (typeof batchId !== 'string') throw invalidImportInput();
+    return writeGate.runWrite(() => services.imports.excludeBatch(batchId));
+  });
+}
+
+function invalidImportInput(): FinanceHubError {
+  return new FinanceHubError(
+    ERROR_CODES.invalidInput,
+    '匯入請求格式不正確。',
   );
 }

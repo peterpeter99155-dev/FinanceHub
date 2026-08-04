@@ -59,6 +59,8 @@ describe('SqliteImportRepository', () => {
     expect(imports.listObservations(snapshot.batch.id)).toEqual(
       snapshot.observations,
     );
+    expect(connection.database.prepare('PRAGMA foreign_key_check').all())
+      .toEqual([]);
     expect(transactions.listByMonth(2026, 7).totalCount).toBe(0);
     expect(items.findById('card-1')).toMatchObject({
       amount: 0,
@@ -105,6 +107,25 @@ describe('SqliteImportRepository', () => {
         .prepare('SELECT COUNT(*) AS count FROM transaction_source_links')
         .get(),
     ).toEqual({ count: 2 });
+  });
+
+  it('enforces create_new kind and amount requirements in SQLite', async () => {
+    const service = createService(imports);
+    const snapshot = await service.createBatch({
+      content: new Uint8Array([1]),
+      creditCardAccountId: 'card-1',
+    });
+    const candidateId = snapshot.candidates[0].id;
+    connection.database.prepare(`
+      UPDATE import_candidates SET kind = NULL, amount = 0 WHERE id = ?
+    `).run(candidateId);
+
+    expect(() => connection.database.prepare(`
+      UPDATE import_candidates SET decision = 'create_new' WHERE id = ?
+    `).run(candidateId)).toThrow(/CHECK constraint failed/i);
+    expect(connection.database.prepare(`
+      SELECT decision FROM import_candidates WHERE id = ?
+    `).get(candidateId)).toEqual({ decision: null });
   });
 
   it('rolls back balances, transactions, links and decisions after a persistence failure', async () => {
@@ -173,6 +194,7 @@ describe('SqliteImportRepository', () => {
             observationFingerprint: '1'.repeat(64),
             kind: 'credit_card_purchase',
             amount: 100,
+            statementEffect: 100,
             occurredAt: '2026-07-10T04:00:00.000Z',
             occurredAtPrecision: 'date',
             summary: '虛構消費',
@@ -184,6 +206,7 @@ describe('SqliteImportRepository', () => {
             observationFingerprint: '2'.repeat(64),
             kind: 'credit_card_refund',
             amount: 30,
+            statementEffect: -30,
             occurredAt: '2026-07-11T04:00:00.000Z',
             occurredAtPrecision: 'date',
             summary: '虛構退款',

@@ -41,6 +41,11 @@ samples/raw/
 
 # Financial source documents
 *.pdf
+!tests/fixtures/import/statement-plain.pdf
+!tests/fixtures/import/statement-encrypted.pdf
+!tests/fixtures/import/unsupported.pdf
+!tests/fixtures/import/scanned.pdf
+!tests/fixtures/import/corrupt.pdf
 *.ofx
 *.qfx
 *.qif

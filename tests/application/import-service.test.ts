@@ -122,6 +122,7 @@ function parsedBatch(
         observationFingerprint: '1'.repeat(64),
         kind: 'credit_card_purchase',
         amount: 100,
+        statementEffect: 100,
         occurredAt: '2026-07-10T04:00:00.000Z',
         occurredAtPrecision: 'date',
         summary: '虛構書店',
@@ -133,6 +134,7 @@ function parsedBatch(
         observationFingerprint: '2'.repeat(64),
         kind: 'credit_card_refund',
         amount: 30,
+        statementEffect: -30,
         occurredAt: '2026-07-11T04:00:00.000Z',
         occurredAtPrecision: 'date',
         summary: '虛構退款',
@@ -203,6 +205,39 @@ describe('ImportService', () => {
     expect(imports.links.size).toBe(0);
   });
 
+  it('keeps an unresolved signed observation pending and rejects create_new until a kind is selected', async () => {
+    const unresolved = {
+      ...parsedBatch().observations[1],
+      kind: undefined,
+      amount: 30,
+      statementEffect: -30,
+      summary: '虛構回饋折抵',
+      warningCodes: ['NEGATIVE_ITEM_REQUIRES_USER_CONFIRMATION'],
+    };
+    const { finance, service } = setup(parsedBatch({
+      statementDetailTotal: -30,
+      observations: [unresolved],
+    }));
+    const created = await service.createBatch({
+      content: new Uint8Array([1]),
+      creditCardAccountId: 'card-1',
+    });
+    expect(created.candidates[0]).toMatchObject({
+      kind: undefined,
+      amount: 30,
+    });
+
+    expect(() => service.confirmCandidates(created.batch.id, [{
+      candidateId: created.candidates[0].id,
+      decision: 'create_new',
+    }])).toThrow('待確認項目必須先指定交易類型與有效金額');
+    expect(finance.transactions.size).toBe(0);
+    expect(finance.items.get('card-1')).toMatchObject({ amount: 0 });
+
+    expect(service.excludeBatch(created.batch.id).candidates[0])
+      .toMatchObject({ decision: 'exclude', kind: undefined });
+  });
+
   it('updates a pending candidate without creating a formal transaction', async () => {
     const { finance, service } = setup();
     const created = await service.createBatch({
@@ -246,6 +281,7 @@ describe('ImportService', () => {
       ...parsedBatch().observations[0],
       observationFingerprint: '3'.repeat(64),
       amount: 20,
+      statementEffect: 20,
       summary: '排除項目',
       anonymousRowLocator: 'page-2-row-3',
     };
