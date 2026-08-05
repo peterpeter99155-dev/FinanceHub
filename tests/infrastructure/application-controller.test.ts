@@ -72,6 +72,7 @@ describe('ApplicationController unlock boundary', () => {
     expect(registry.has(IPC_CHANNELS.selectImportStatement)).toBe(true);
     expect(registry.has(IPC_CHANNELS.parseSelectedImportStatement)).toBe(true);
     expect(registry.has(IPC_CHANNELS.getImportBatch)).toBe(true);
+    expect(registry.has(IPC_CHANNELS.listImportBatches)).toBe(true);
     expect(registry.has(IPC_CHANNELS.updateImportCandidate)).toBe(true);
     expect(registry.has(IPC_CHANNELS.confirmImportCandidates)).toBe(true);
     expect(registry.has(IPC_CHANNELS.excludeImportBatch)).toBe(true);

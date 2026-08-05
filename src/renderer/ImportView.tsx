@@ -9,13 +9,14 @@ import { BackupStatusFeedback, type BackupFeedback } from './components/BackupSt
 import { ImportBatchSummary } from './components/ImportBatchSummary';
 import { ImportCandidateCard } from './components/ImportCandidateCard';
 import { ImportSourceForm } from './components/ImportSourceForm';
+import { ImportHistory } from './components/ImportHistory';
 import { activeCreditCards, dateOnlyToTaipeiNoon, draftFromCandidate, type ImportCandidateDraft } from './importViewModel';
 import { importErrorMessage } from './messages';
 
-interface Props { readonly accounts: readonly FinancialItem[]; readonly onCreateCreditCard: () => void; readonly onBalancesChanged: () => Promise<void>; }
+interface Props { readonly accounts: readonly FinancialItem[]; readonly onBalancesChanged: () => Promise<void>; }
 interface UiState { readonly busy: boolean; readonly feedback?: BackupFeedback; }
 
-export function ImportView({ accounts, onCreateCreditCard, onBalancesChanged }: Props) {
+export function ImportView({ accounts, onBalancesChanged }: Props) {
   const cards = useMemo(() => activeCreditCards(accounts), [accounts]);
   const [selection, setSelection] = useState<ImportFileSelection | null>(null);
   const [password, setPassword] = useState('');
@@ -51,11 +52,33 @@ export function ImportView({ accounts, onCreateCreditCard, onBalancesChanged }: 
       const next = await window.financeHub.imports.parseSelectedStatement(selection.selectionToken, password, cardId);
       setPassword('');
       await loadSnapshot(next);
-      showFeedback({ tone: 'success', message: '帳單解析完成，請逐筆確認。' });
+      showFeedback({
+        tone: next.wasAlreadyImported ? 'warning' : 'success',
+        message: next.wasAlreadyImported
+          ? '這份帳單先前已匯入，已顯示既有內容。'
+          : '帳單解析完成，請逐筆確認。',
+      });
     } catch (error) {
       setPassword('');
       showFeedback({ tone: 'error', message: importErrorMessage(error) });
     } finally { setUi((current) => ({ ...current, busy: false })); }
+  }
+
+  async function createCreditCard(name: string): Promise<FinancialItem> {
+    const existingIds = new Set(accounts.map(({ id }) => id));
+    const next = await window.financeHub.financialItems.create({
+      name,
+      direction: 'liability',
+      type: 'credit_card',
+      amount: 0,
+      status: 'confirmed',
+      includeInNetWorth: true,
+    });
+    const created = next.items.find(({ id }) => !existingIds.has(id));
+    if (!created) throw { code: 'UNKNOWN' };
+    setCardId(created.id);
+    await onBalancesChanged();
+    return created;
   }
 
   async function loadSnapshot(next: ImportBatchSnapshot) {
@@ -110,7 +133,8 @@ export function ImportView({ accounts, onCreateCreditCard, onBalancesChanged }: 
     <section className="import-view">
       <div className="page-heading"><div><p className="label">交易自動化</p><h2>帳單匯入與待確認</h2></div></div>
       <div className="import-feedback-slot">{ui.feedback && <BackupStatusFeedback feedback={ui.feedback} />}</div>
-      <ImportSourceForm cards={cards} selection={selection} password={password} cardId={cardId} busy={ui.busy} onCardId={setCardId} onPassword={setPassword} onSelect={() => void selectFile()} onParse={() => void parseStatement()} onCreateCard={onCreateCreditCard} />
+      <ImportSourceForm cards={cards} selection={selection} password={password} cardId={cardId} busy={ui.busy} onCardId={setCardId} onPassword={setPassword} onSelect={() => void selectFile()} onParse={() => void parseStatement()} onCreateCard={createCreditCard} />
+      <ImportHistory accounts={accounts} refreshKey={snapshot?.batch.id} onOpen={loadSnapshot} />
       {snapshot && <><ImportBatchSummary snapshot={snapshot} /><div className="import-list-heading"><h2>待確認項目</h2><button type="button" disabled={ui.busy || pendingIds.length === 0} onClick={() => void confirm(pendingIds)}>確認全部處理方式</button></div>
         <div className="import-candidate-list">{snapshot.candidates.map((candidate) => <ImportCandidateCard key={candidate.id} candidate={candidate} insight={snapshot.insights.find((item) => item.candidateId === candidate.id)} observation={snapshot.observations.find((item) => item.id === candidate.observationId)} draft={drafts[candidate.id]} cards={cards} categories={categories} transactions={transactions} busy={ui.busy} onChange={(patch) => changeDraft(candidate.id, patch)} onConfirm={() => void confirm([candidate.id])} />)}</div></>}
     </section>

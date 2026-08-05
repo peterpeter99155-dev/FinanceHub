@@ -215,6 +215,10 @@ const financeHubApi: FinanceHubApi = Object.freeze({
         IPC_CHANNELS.getImportBatch,
         id,
       ),
+    listBatches: () =>
+      invoke<Awaited<ReturnType<ImportsApi['listBatches']>>>(
+        IPC_CHANNELS.listImportBatches,
+      ),
     updateCandidate: (id: string, update: ImportCandidateUpdate) =>
       invoke<Awaited<ReturnType<ImportsApi['updateCandidate']>>>(
         IPC_CHANNELS.updateImportCandidate,

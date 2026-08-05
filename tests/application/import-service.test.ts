@@ -72,6 +72,10 @@ class MemoryImportRepository implements ImportRepository {
       ({ sourceFileDigest }) => sourceFileDigest === digest,
     );
   }
+  listBatches() {
+    return [...this.batches.values()].sort((left, right) =>
+      right.importedAt.localeCompare(left.importedAt));
+  }
 
   findObservationsByFingerprint(fingerprint: string) {
     return [...this.observations.values()].filter(
@@ -272,19 +276,26 @@ describe('ImportService', () => {
     expect(finance.items.get('card-1')?.amount).toBe(0);
   });
 
-  it('rejects an identical source digest without creating another batch', async () => {
+  it('reopens an identical source without creating another batch', async () => {
     const { imports, service } = setup();
     const request = {
       content: new Uint8Array([1]),
       creditCardAccountId: 'card-1',
     };
-    await service.createBatch(request);
+    const original = await service.createBatch(request);
+    const reopened = await service.createBatch(request);
 
-    await expect(service.createBatch(request)).rejects.toMatchObject({
-      code: 'IMPORT_DUPLICATE_SOURCE',
+    expect(reopened).toMatchObject({
+      batch: { id: original.batch.id },
+      wasAlreadyImported: true,
     });
     expect(imports.batches.size).toBe(1);
     expect(imports.candidates.size).toBe(2);
+    expect(service.listBatches()).toEqual([{
+      batch: original.batch,
+      candidateCount: 2,
+      pendingCount: 2,
+    }]);
   });
 
   it('reports an observation already linked from another source without auto-merging it', async () => {

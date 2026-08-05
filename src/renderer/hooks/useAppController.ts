@@ -271,17 +271,6 @@ export function useAppController() {
     focusNameInput();
   }
 
-  function prepareNewCreditCard() {
-    setActiveView('assets');
-    setEditingId(null);
-    setDraft({
-      ...EMPTY_DRAFT,
-      direction: 'liability',
-      type: 'credit_card',
-    });
-    focusNameInput();
-  }
-
   return {
     actionError, activeView, assetItems, categories, changeAmount,
     changeDirection, changeItemType, confirmDeleteItem, customTypes,
@@ -289,7 +278,7 @@ export function useAppController() {
     isDeleting, isManagementOpen, isSaving, itemTypeLabel,
     liabilityItems, loadItems, managementError, managementSection,
     nameInputRef, notification, openManagement, pendingDeleteItem,
-    prepareNewAsset, prepareNewCreditCard, resetForm, setActiveView, setCategories,
+    prepareNewAsset, resetForm, setActiveView, setCategories,
     setCustomTypes, setDraft, setEditingId, setIsManagementOpen,
     setManagementError, setManagementSection, setPendingDeleteItem,
     setTypeManagementVersion, showNotification, startEditing,

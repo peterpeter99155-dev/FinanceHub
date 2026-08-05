@@ -1060,6 +1060,34 @@ form .checkbox-label {
   place-items: center;
 }
 
+.import-history {
+  margin-top: 18px;
+}
+
+.import-history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.import-history-item {
+  display: flex;
+  padding: 14px 16px;
+  border: 1px solid #dce2dd;
+  border-radius: 14px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.import-history-item > div {
+  display: grid;
+  gap: 3px;
+}
+
+.import-history-item span,
+.import-history-item small {
+  color: #607168;
+}
+
 .confirm-dialog {
   width: min(440px, 100%);
   padding: 28px;

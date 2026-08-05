@@ -40,7 +40,6 @@ export function App() {
     openManagement,
     pendingDeleteItem,
     prepareNewAsset,
-    prepareNewCreditCard,
     resetForm,
     setActiveView,
     setCategories,
@@ -225,7 +224,6 @@ export function App() {
             <ImportView
               accounts={viewState.snapshot.items}
               onBalancesChanged={loadItems}
-              onCreateCreditCard={prepareNewCreditCard}
             />
           ) : (
             <BackupSettingsView />

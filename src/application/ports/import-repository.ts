@@ -16,6 +16,7 @@ export interface ImportRepository {
   createBatchGraph(graph: ImportBatchGraph): void;
   findBatchById(id: string): ImportBatch | undefined;
   findBatchBySourceFileDigest(digest: string): ImportBatch | undefined;
+  listBatches(): readonly ImportBatch[];
   findObservationsByFingerprint(
     fingerprint: string,
   ): readonly SourceObservation[];

@@ -37,6 +37,7 @@ export const IPC_CHANNELS = {
   selectImportStatement: 'imports:select-statement',
   parseSelectedImportStatement: 'imports:parse-selected-statement',
   getImportBatch: 'imports:get-batch',
+  listImportBatches: 'imports:list-batches',
   updateImportCandidate: 'imports:update-candidate',
   confirmImportCandidates: 'imports:confirm-candidates',
   excludeImportBatch: 'imports:exclude-batch',

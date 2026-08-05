@@ -114,6 +114,11 @@ async function main() {
         'A test-only password was included in the production bundle.',
       );
     }
+    if (!productionBundle.includes(Buffer.from('pdfjsWorker', 'utf8'))) {
+      throw new Error(
+        'The offline PDF.js worker was not included in the production bundle.',
+      );
+    }
 
     process.stdout.write(
       [
@@ -124,6 +129,7 @@ async function main() {
         'Financial IPC rejected before unlock: true',
         'Test-only passwords in production bundle: 0',
         'Known test-derived keys in production bundle: 0',
+        'Offline PDF.js worker in production bundle: true',
         '',
       ].join('\n'),
     );

@@ -315,9 +315,18 @@ function createApi(
       selectStatementFile: async () => ({ status: 'selected', selectionToken: 'selection-1', displayName: '虛構信用卡帳單.pdf' }),
       parseSelectedStatement: async () => {
         if (importScenario === 'failure') throw { code: 'PDF_PARSE_INCOMPLETE' };
-        return importSnapshot;
+        return importScenario === 'duplicate'
+          ? { ...importSnapshot, wasAlreadyImported: true }
+          : importSnapshot;
       },
       getBatch: async () => importSnapshot,
+      listBatches: async () => [{
+        batch: importSnapshot.batch,
+        candidateCount: importSnapshot.candidates.length,
+        pendingCount: importSnapshot.candidates.filter(
+          ({ decision }) => !decision,
+        ).length,
+      }],
       updateCandidate: async (id, update) => {
         const current = importSnapshot.candidates.find((item) => item.id === id);
         if (!current) throw { code: 'IMPORT_CANDIDATE_UNAVAILABLE' };
@@ -327,6 +336,26 @@ function createApi(
       },
       confirmCandidates: async (_batchId, decisions) => {
         if (importScenario === 'confirm-failure') throw { code: 'IMPORT_CANDIDATE_UNAVAILABLE' };
+        for (const decision of decisions) {
+          if (decision.decision !== 'create_new') continue;
+          const candidate = importSnapshot.candidates.find(
+            ({ id }) => id === decision.candidateId,
+          );
+          if (!candidate?.kind) continue;
+          state.transactions.push({
+            id: `created-${candidate.id}`,
+            kind: candidate.kind,
+            amount: createTwdAmount(candidate.amount),
+            occurredAt: candidate.occurredAt,
+            occurredAtPrecision: candidate.occurredAtPrecision,
+            destinationAccountId: candidate.creditCardAccountId,
+            categoryId: candidate.categoryId ?? 'expense-uncategorized',
+            name: candidate.name,
+            note: '',
+            createdAt: NOW,
+            updatedAt: NOW,
+          });
+        }
         importSnapshot = { ...importSnapshot, candidates: importSnapshot.candidates.map((item) => {
           const decision = decisions.find((entry) => entry.candidateId === item.id);
           return decision ? { ...item, decision: decision.decision, transactionId: decision.existingTransactionId ?? `created-${item.id}`, updatedAt: NOW } : item;

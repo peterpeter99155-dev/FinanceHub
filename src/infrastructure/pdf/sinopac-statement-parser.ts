@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto';
 
+// The main-process webpack bundle cannot resolve PDF.js's runtime
+// `import(/* webpackIgnore */ workerSrc)`. Import the verified worker module
+// explicitly so PDF.js can use its in-process WorkerMessageHandler offline.
+import 'pdfjs-dist/legacy/build/pdf.worker.mjs';
 import {
   getDocument,
   InvalidPDFException,
@@ -169,20 +173,42 @@ async function parsePdf(
     return buildParsedBatch(pages, request);
   } catch (error) {
     if (error instanceof FinanceHubError) throw error;
-    if (error instanceof PasswordException) {
-      throw safePdfError(
-        error.code === PasswordResponses.NEED_PASSWORD
-          ? ERROR_CODES.pdfPasswordRequired
-          : ERROR_CODES.pdfPasswordIncorrect,
-      );
-    }
-    if (error instanceof InvalidPDFException) {
-      throw safePdfError(ERROR_CODES.pdfInvalid);
-    }
+    const stableCode = pdfJsErrorCode(error);
+    if (stableCode) throw safePdfError(stableCode);
     throw safePdfError(ERROR_CODES.pdfParseFailed);
   } finally {
     await loadingTask.destroy().catch(() => undefined);
   }
+}
+
+export function pdfJsErrorCode(error: unknown): ErrorCode | undefined {
+  if (
+    error instanceof PasswordException ||
+    hasPdfJsErrorName(error, 'PasswordException')
+  ) {
+    return pdfJsErrorNumericCode(error) === PasswordResponses.NEED_PASSWORD
+      ? ERROR_CODES.pdfPasswordRequired
+      : ERROR_CODES.pdfPasswordIncorrect;
+  }
+  if (
+    error instanceof InvalidPDFException ||
+    hasPdfJsErrorName(error, 'InvalidPDFException')
+  ) {
+    return ERROR_CODES.pdfInvalid;
+  }
+  return undefined;
+}
+
+function hasPdfJsErrorName(error: unknown, name: string): boolean {
+  return typeof error === 'object' && error !== null &&
+    'name' in error && error.name === name;
+}
+
+function pdfJsErrorNumericCode(error: unknown): number | undefined {
+  return typeof error === 'object' && error !== null &&
+    'code' in error && typeof error.code === 'number'
+    ? error.code
+    : undefined;
 }
 
 function buildParsedBatch(

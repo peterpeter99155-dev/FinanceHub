@@ -53,6 +53,7 @@ describe('SqliteImportRepository', () => {
     });
 
     expect(imports.findBatchById(snapshot.batch.id)).toEqual(snapshot.batch);
+    expect(imports.listBatches()).toEqual([snapshot.batch]);
     expect(imports.listCandidates(snapshot.batch.id)).toEqual(
       snapshot.candidates,
     );
@@ -146,6 +147,7 @@ describe('SqliteImportRepository', () => {
       findBatchById: imports.findBatchById.bind(imports),
       findBatchBySourceFileDigest:
         imports.findBatchBySourceFileDigest.bind(imports),
+      listBatches: imports.listBatches.bind(imports),
       findObservationsByFingerprint:
         imports.findObservationsByFingerprint.bind(imports),
       findSourceLinkByObservationId:

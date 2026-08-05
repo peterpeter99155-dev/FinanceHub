@@ -19,6 +19,22 @@ test('匯入預覽顯示核對、時間未知、警告並可批次確認', async
   await page.getByRole('button', { name: '確認全部處理方式' }).click();
   await expect(page.getByText('這批資料已完成處理。')).toBeVisible();
   await expect(page.getByText('已處理：建立新交易')).toHaveCount(2);
+  await page.getByRole('button', { name: '收支紀錄' }).click();
+  await page.getByRole('button', { name: '上個月' }).click();
+  await expect(page.getByText('虛構餐廳', { exact: true })).toBeVisible();
+  await expect(page.getByText('虛構扣抵', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '帳單匯入' }).click();
+  await expect(page.getByRole('heading', { name: '匯入紀錄' })).toBeVisible();
+  await page.getByRole('button', { name: '查看內容' }).click();
+  await expect(page.getByText('已處理：建立新交易')).toHaveCount(2);
+});
+
+test('重複匯入會開啟既有批次而不是建立第二份', async ({ page }) => {
+  await openImport(page, 'duplicate');
+  await expect(page.getByText('這份帳單先前已匯入，已顯示既有內容。'))
+    .toBeVisible();
+  await expect(page.getByTestId('import-candidate')).toHaveCount(2);
+  await expect(page.getByRole('heading', { name: '匯入紀錄' })).toBeVisible();
 });
 
 test('連結既有交易會顯示差異且不宣稱修改既有交易', async ({ page }) => {
@@ -44,16 +60,20 @@ test('批次失敗不顯示成功', async ({ page }) => {
   await expect(page.getByText(/已處理：/)).toHaveCount(0);
 });
 
-test('沒有信用卡時可前往新增信用卡', async ({ page }) => {
+test('沒有信用卡時可在匯入頁快速新增並自動選取', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '帳單匯入' }).click();
+  await expect(page.getByRole('heading', { name: '匯入信用卡月結帳單' }))
+    .toBeVisible();
+  await expect(page.getByText('匯入永豐信用卡月結帳單')).toHaveCount(0);
   await expect(page.getByText('請先新增要對應的信用卡。')).toBeVisible();
   await page.getByRole('button', { name: '新增信用卡' }).click();
-  await expect(page.getByTestId('item-type')).toHaveValue('credit_card');
-  await page.getByTestId('item-name').fill('虛構信用卡');
-  await page.getByTestId('item-amount').fill('0');
-  await page.getByRole('button', { name: '新增項目' }).click();
-  await expect(page.getByText('虛構信用卡', { exact: true })).toBeVisible();
+  await page.getByLabel('信用卡名稱').fill('虛構信用卡');
+  await page.getByRole('button', { name: '建立並選取' }).click();
+  await expect(page.getByRole('heading', { name: '匯入信用卡月結帳單' }))
+    .toBeVisible();
+  await expect(page.getByTestId('import-card')).toHaveValue(/item-/);
+  await expect(page.getByTestId('import-card')).toContainText('虛構信用卡');
 });
 
 test('疑似重複與分類只提出建議並由使用者採用', async ({ page }) => {

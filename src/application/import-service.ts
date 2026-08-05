@@ -42,6 +42,13 @@ export interface ImportBatchSnapshot {
   readonly observations: readonly SourceObservation[];
   readonly candidates: readonly ImportCandidate[];
   readonly insights: readonly ImportCandidateInsight[];
+  readonly wasAlreadyImported?: boolean;
+}
+
+export interface ImportBatchHistoryItem {
+  readonly batch: ImportBatch;
+  readonly candidateCount: number;
+  readonly pendingCount: number;
 }
 
 export interface ImportCandidateInsight {
@@ -85,13 +92,11 @@ export class ImportService {
     this.requireCreditCard(request.creditCardAccountId);
     const parsed = await this.parser.parse(request);
     this.validateParsedBatch(parsed, request.creditCardAccountId);
-    if (
-      this.imports.findBatchBySourceFileDigest(parsed.sourceFileDigest)
-    ) {
-      throw new FinanceHubError(
-        ERROR_CODES.importDuplicateSource,
-        'The source file was already imported.',
-      );
+    const existing = this.imports.findBatchBySourceFileDigest(
+      parsed.sourceFileDigest,
+    );
+    if (existing) {
+      return { ...this.getBatch(existing.id), wasAlreadyImported: true };
     }
 
     const importedAt = this.clock.now();
@@ -160,6 +165,17 @@ export class ImportService {
         ),
       ),
     };
+  }
+
+  listBatches(): readonly ImportBatchHistoryItem[] {
+    return this.imports.listBatches().map((batch) => {
+      const candidates = this.imports.listCandidates(batch.id);
+      return {
+        batch,
+        candidateCount: candidates.length,
+        pendingCount: candidates.filter(({ decision }) => !decision).length,
+      };
+    });
   }
 
   private buildInsight(

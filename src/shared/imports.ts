@@ -4,6 +4,7 @@ import type {
 } from '../domain/import';
 import type {
   ImportBatchSnapshot,
+  ImportBatchHistoryItem,
   ImportCandidateUpdate,
 } from '../application/import-service';
 
@@ -23,6 +24,7 @@ export interface ImportsApi {
     creditCardAccountId: string,
   ): Promise<ImportBatchSnapshot>;
   getBatch(id: string): Promise<ImportBatchSnapshot>;
+  listBatches(): Promise<readonly ImportBatchHistoryItem[]>;
   updateCandidate(
     id: string,
     update: ImportCandidateUpdate,

@@ -156,6 +156,19 @@ export class SqliteImportRepository implements ImportRepository {
     return this.findBatch('source_file_digest', digest);
   }
 
+  listBatches(): readonly ImportBatch[] {
+    const rows = this.database
+      .prepare(`
+        SELECT id, source_type, source_file_digest, statement_month,
+               credit_card_account_id, imported_at, parser_name,
+               parser_version, statement_detail_total, parsed_detail_total
+        FROM import_batches
+        ORDER BY imported_at DESC, id DESC
+      `)
+      .all() as unknown as BatchRow[];
+    return rows.map(mapBatch);
+  }
+
   findObservationsByFingerprint(
     fingerprint: string,
   ): readonly SourceObservation[] {

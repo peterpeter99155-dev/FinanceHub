@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   classifySinopacObservation,
+  pdfJsErrorCode,
   PDF_PARSE_LIMITS,
   SinopacStatementParser,
 } from '../../src/infrastructure/pdf/sinopac-statement-parser';
@@ -74,6 +75,17 @@ describe('SinopacStatementParser', () => {
     await expect(toIpcResult(() =>
       parseFixture('statement-encrypted.pdf', 'another-wrong-password'),
     )).resolves.toEqual({ ok: false, code: 'PDF_PASSWORD_INCORRECT' });
+  });
+
+  it('recognizes PDF.js errors reconstructed across a worker or bundle boundary', () => {
+    expect(pdfJsErrorCode({ name: 'PasswordException', code: 1 }))
+      .toBe('PDF_PASSWORD_REQUIRED');
+    expect(pdfJsErrorCode({ name: 'PasswordException', code: 2 }))
+      .toBe('PDF_PASSWORD_INCORRECT');
+    expect(pdfJsErrorCode({ name: 'InvalidPDFException' }))
+      .toBe('PDF_INVALID');
+    expect(pdfJsErrorCode({ name: 'UnknownErrorException', code: 2 }))
+      .toBeUndefined();
   });
 
   it('does not use statement reconciliation effect as a transaction-kind guess', () => {

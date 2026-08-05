@@ -107,6 +107,18 @@ export function importErrorMessage(error: unknown): string {
   if (code === ERROR_CODES.importDuplicateSource) return '這份帳單已經匯入過。';
   if (code === ERROR_CODES.importReconciliationMismatch) return '帳單明細加總與銀行合計不一致，無法確認。';
   if (code === ERROR_CODES.importCandidateUnavailable) return '待確認項目已處理、資料不完整或不存在。';
+  if (code === ERROR_CODES.importSelectionUnavailable) return '選取的帳單已失效，請重新選擇 PDF。';
+  if (code === ERROR_CODES.pdfPasswordRequired) return '這份 PDF 需要密碼，請輸入後再解析。';
+  if (code === ERROR_CODES.pdfPasswordIncorrect) return 'PDF 密碼不正確，請重新輸入。';
+  if (code === ERROR_CODES.pdfFileTooLarge) return 'PDF 檔案超過可解析的大小上限。';
+  if (code === ERROR_CODES.pdfPageLimitExceeded) return 'PDF 頁數超過可解析的上限。';
+  if (code === ERROR_CODES.pdfTextItemLimitExceeded) return 'PDF 文字內容超過可解析的上限。';
+  if (code === ERROR_CODES.pdfParseTimeout) return 'PDF 解析時間過長，已安全停止。';
+  if (code === ERROR_CODES.pdfInvalid) return 'PDF 已損壞或不是有效的 PDF 檔案。';
+  if (code === ERROR_CODES.pdfNoExtractableText) return '這份 PDF 沒有可抽取文字；目前不支援掃描型帳單。';
+  if (code === ERROR_CODES.pdfUnsupportedFormat) return '目前無法辨識這份信用卡帳單的版面。';
+  if (code === ERROR_CODES.pdfParseIncomplete) return '帳單有部分內容無法完整辨識，未建立任何待確認資料。';
+  if (code === ERROR_CODES.pdfParseFailed) return 'PDF 解析失敗，未保存帳單內容或密碼。';
   if (code === ERROR_CODES.invalidAccount) return '請選擇有效的信用卡。';
   if (code === ERROR_CODES.invalidCategory) return '請選擇有效的支出分類。';
   if (code === ERROR_CODES.amountOutOfRange) return '金額不在可接受範圍內。';

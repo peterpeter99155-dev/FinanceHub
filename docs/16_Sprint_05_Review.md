@@ -43,11 +43,12 @@ Sprint 05 新增 migration 9～12：
 
 ## 4. IPC 與安全邊界
 
-新增六條匯入 IPC：
+新增七條匯入 IPC：
 
 - `imports:select-statement`
 - `imports:parse-selected-statement`
 - `imports:get-batch`
+- `imports:list-batches`
 - `imports:update-candidate`
 - `imports:confirm-candidates`
 - `imports:exclude-batch`
@@ -64,9 +65,9 @@ IPC 僅回傳穩定錯誤代碼及安全文案，不回傳原始 filesystem/PDF 
 - PDF.js worker、字型及 WASM 不連網下載；正式 bundle 未加入 viewer。
 - 同一台 Windows x64、同一 Electron/Forge 設定，以 `main` 快照與本
   Sprint HEAD 實際 A/B：
-  - Setup：138.03 MiB → 138.18 MiB，增加 159,744 bytes（0.15 MiB）。
-  - `app.asar`：453,308 → 1,012,347 bytes，增加 559,039 bytes。
-  - packaged 目錄：374,383,933 → 374,942,972 bytes，增加 559,039 bytes。
+  - Setup：138.03 MiB → 138.54 MiB，增加 527,360 bytes（0.50 MiB）。
+  - `app.asar`：453,308 → 2,260,454 bytes，增加 1,807,146 bytes。
+  - packaged 目錄：374,383,933 → 376,191,079 bytes，增加 1,807,146 bytes。
 - Setup 增量低於 30 MiB 停止門檻，未以舊版、連網資產或降低 Electron
   安全設定換取容量。
 
@@ -78,8 +79,8 @@ IPC 僅回傳穩定錯誤代碼及安全文案，不回傳原始 filesystem/PDF 
 typecheck: passed
 lint: passed
 verify: Architecture verification passed; guards 18/18 passed
-unit/integration: 35 files passed, 227 tests passed
-browser e2e: 19 passed
+unit/integration: 36 files passed, 235 tests passed
+browser e2e: 20 passed
 package smoke: passed
 production test-password matches: 0
 production known test-derived-key matches: 0
@@ -101,7 +102,7 @@ Electron 10 次使用相同的 `app.asar`，前後 SHA-256 均為：
 - `out/make/squirrel.windows/x64/financehub-0.1.0-full.nupkg`
 - `out/make/zip/win32/x64/FinanceHub-win32-x64-0.1.0.zip`
 
-最新 Setup 為 144,897,024 bytes。先停止已安裝的 FinanceHub、正常卸載並
+最新 Setup 為 145,264,640 bytes。先停止已安裝的 FinanceHub、正常卸載並
 確認安裝根目錄消失，再以最新 Setup 安裝；安裝後執行檔存在且可啟動。
 
 退款／雙餘額紅燈證明：故意把退款的應繳效果由 `decrease` 改成
@@ -124,12 +125,14 @@ Electron 10 次使用相同的 `app.asar`，前後 SHA-256 均為：
 
 ## 8. 未完成、偏離計畫與限制
 
-- 安裝版的啟動、加密資料庫、備份及還原 regression 已由真實安裝執行檔
-  自動驗收通過。安裝版 PDF 的「原生檔案選擇視窗」無法由目前的背景
-  自動化程序可靠取得焦點，因此沒有把不穩定的 UIAutomation 腳本提交
-  為假綠燈。完全離線 PDF 解析已由同一 packaged production bundle 的
-  parser/integration 測試與使用者本機真實帳單驗收覆蓋，但「安裝後由
-  UI 選檔並完成解析」仍需一次人工安裝端確認。
+- 最初的 production bundle 遺漏 PDF.js worker，導致安裝／package 版
+  在真正解析前以一般 `Error` 失敗；開發環境可從 `node_modules` 動態
+  載入，因此原本測試未抓到。修正後明確把同版本 worker 離線打入 main
+  bundle，package smoke 會檢查 `pdfjsWorker` 存在。使用者已在本機透過
+  真實 package UI 完成選檔、輸入一次性 PDF 密碼及解析，確認正常。
+- 匯入頁已補上匯入紀錄；既有批次可重新開啟，同一 PDF 再匯入會顯示
+  原批次而不建立第二份。快速新增信用卡只要求名稱，以 TWD 0 建立並
+  自動選取，使用者不必離開匯入頁。
 - parser 僅支援目前已確認的永豐信用卡月結帳單文字版面；版面變更時會
   安全失敗，不會寬鬆猜測。
 - parser v1.0 已存資料的舊來源指紋不會自動重寫；新資料使用 v1.1

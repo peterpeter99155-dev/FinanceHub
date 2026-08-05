@@ -393,6 +393,9 @@ function registerFinancialHandlers(
     if (typeof id !== 'string') throw invalidImportInput();
     return services.imports.getBatch(id);
   });
+  registry.handle(IPC_CHANNELS.listImportBatches, () =>
+    services.imports.listBatches(),
+  );
   registry.handle(
     IPC_CHANNELS.updateImportCandidate,
     (id: unknown, update: unknown) => {

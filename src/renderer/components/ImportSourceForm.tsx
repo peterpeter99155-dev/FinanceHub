@@ -1,6 +1,7 @@
 import { PasswordInput } from './PasswordInput';
 import type { FinancialItem } from '../../domain/financial-item';
 import type { ImportFileSelection } from '../../shared/imports';
+import { QuickCreditCardDialog } from './QuickCreditCardDialog';
 
 interface Props {
   readonly cards: readonly FinancialItem[];
@@ -12,16 +13,16 @@ interface Props {
   readonly onPassword: (value: string) => void;
   readonly onSelect: () => void;
   readonly onParse: () => void;
-  readonly onCreateCard: () => void;
+  readonly onCreateCard: (name: string) => Promise<FinancialItem>;
 }
 
 export function ImportSourceForm(props: Props) {
   const selected = props.selection?.status === 'selected' ? props.selection : null;
   return (
     <section className="panel import-source-panel">
-      <div className="section-heading"><div><p className="label">本機帳單</p><h2>匯入永豐信用卡月結帳單</h2></div></div>
+      <div className="section-heading"><div><p className="label">本機帳單</p><h2>匯入信用卡月結帳單</h2><small>目前支援：永豐信用卡文字型 PDF</small></div></div>
       {props.cards.length === 0 ? (
-        <div className="empty-state"><p>請先新增要對應的信用卡。</p><button type="button" onClick={props.onCreateCard}>新增信用卡</button></div>
+        <div className="empty-state"><p>請先新增要對應的信用卡。</p><QuickCreditCardDialog onCreated={props.onCreateCard} /></div>
       ) : (
         <div className="import-source-fields">
           <label>信用卡<select data-testid="import-card" value={props.cardId} onChange={(event) => props.onCardId(event.target.value)}>
@@ -34,6 +35,7 @@ export function ImportSourceForm(props: Props) {
             <span>{selected?.displayName ?? '尚未選擇檔案'}</span>
             <button data-testid="parse-statement" type="button" disabled={props.busy || !selected || !props.cardId || !props.password} onClick={props.onParse}>開始解析</button>
           </div>
+          <div><QuickCreditCardDialog onCreated={props.onCreateCard} /></div>
           <small>PDF 密碼不會保存、記錄或顯示在解析結果中；原始 PDF 也不會複製保存。</small>
         </div>
       )}
