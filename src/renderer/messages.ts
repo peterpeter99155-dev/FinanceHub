@@ -107,6 +107,7 @@ export function importErrorMessage(error: unknown): string {
   if (code === ERROR_CODES.importDuplicateSource) return '這份帳單已經匯入過。';
   if (code === ERROR_CODES.importReconciliationMismatch) return '帳單明細加總與銀行合計不一致，無法確認。';
   if (code === ERROR_CODES.importCandidateUnavailable) return '待確認項目已處理、資料不完整或不存在。';
+  if (code === ERROR_CODES.importBatchInUse) return '這筆匯入紀錄已建立或連結正式交易，不能直接移除。';
   if (code === ERROR_CODES.importSelectionUnavailable) return '選取的帳單已失效，請重新選擇 PDF。';
   if (code === ERROR_CODES.pdfPasswordRequired) return '這份 PDF 需要密碼，請輸入後再解析。';
   if (code === ERROR_CODES.pdfPasswordIncorrect) return 'PDF 密碼不正確，請重新輸入。';
@@ -125,6 +126,36 @@ export function importErrorMessage(error: unknown): string {
   if (code === ERROR_CODES.futureTransaction) return '交易日期不能晚於今天。';
   return '帳單匯入未完成，請檢查檔案、PDF 密碼與待確認內容。';
 }
+
+export function importPartialConfirmationMessage(
+  confirmedCount: number,
+  skippedCount: number,
+): string {
+  return `已處理 ${confirmedCount} 筆；另有 ${skippedCount} 筆疑似重複仍待選擇。`;
+}
+
+export function importReconciliationBlockedMessage(
+  difference: number,
+  singleCandidate: boolean,
+): string {
+  const formatted = new Intl.NumberFormat('zh-TW').format(difference);
+  return singleCandidate
+    ? `這筆內容已完成檢查，但整份帳單仍差 TWD ${formatted}，暫時不能建立交易。`
+    : `整份帳單仍差 TWD ${formatted}，請先檢查明細後再確認。`;
+}
+
+export const IMPORT_MESSAGES = {
+  parsed:
+    '帳單解析完成；一般項目可直接確認，需要時再展開修改。',
+  alreadyImported: '這份帳單先前已匯入，已顯示既有內容。',
+  duplicateDecisionRequired: '疑似重複的項目仍需選擇處理方式。',
+  candidateConfirmed: '這筆資料已確認。',
+  batchConfirmed: '這批資料已完成處理。',
+  creditCardNameRequired: '請輸入信用卡名稱。',
+  removeHistoryDescription:
+    '移除後可重新匯入同一份 PDF；電腦上的原始 PDF 不會被刪除。',
+  historyRemoved: '匯入紀錄已移除，可以重新選擇同一份 PDF。',
+} as const;
 
 export function backupErrorMessage(error: unknown): string {
   const code = errorCodeOf(error);

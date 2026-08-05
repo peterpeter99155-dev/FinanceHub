@@ -81,6 +81,14 @@ export interface CandidateDecision {
   readonly candidateId: string;
   readonly decision: ImportDecision;
   readonly existingTransactionId?: string;
+  readonly duplicateDecisionConfirmed?: true;
+}
+
+export function hasImportDuplicateSignal(
+  duplicateObservationCount: number,
+  matchingTransactionCount: number,
+): boolean {
+  return duplicateObservationCount > 0 || matchingTransactionCount > 0;
 }
 
 export function calculateStatementDetailTotal(
@@ -94,6 +102,28 @@ export function calculateStatementDetailTotal(
     total += observation.statementEffect;
     if (!Number.isSafeInteger(total)) {
       throw new Error('Statement detail total exceeds the supported range.');
+    }
+  }
+  return total;
+}
+
+export function calculateReviewedStatementDetailTotal(
+  items: readonly {
+    readonly kind?: ImportTransactionKind;
+    readonly amount: number;
+    readonly originalStatementEffect: number;
+  }[],
+): number {
+  let total = 0;
+  for (const item of items) {
+    const effect = item.kind === 'credit_card_purchase'
+      ? item.amount
+      : item.kind === 'credit_card_refund'
+        ? -item.amount
+        : item.originalStatementEffect;
+    total += effect;
+    if (!Number.isSafeInteger(total)) {
+      throw new Error('Reviewed statement detail total exceeds the supported range.');
     }
   }
   return total;

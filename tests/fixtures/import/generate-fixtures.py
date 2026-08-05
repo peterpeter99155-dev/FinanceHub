@@ -2,6 +2,7 @@
 
 from io import BytesIO
 from pathlib import Path
+import sys
 
 from PIL import Image
 from pypdf import PdfReader, PdfWriter
@@ -26,30 +27,31 @@ def row(canvas: Canvas, y: float, values: tuple[str, ...]) -> None:
         text(canvas, x, y, value, 7)
 
 
-def statement() -> bytes:
+def statement(year: int = 2030, month: int = 1) -> bytes:
     output = BytesIO()
     canvas = Canvas(output, pagesize=A4)
     _, height = A4
     text(canvas, 42, height - 42, "虛構信用卡月結資料", 15)
-    text(canvas, 42, height - 100, "結帳日 2030/01/16")
+    text(canvas, 42, height - 100, f"結帳日 {year:04d}/{month:02d}/16")
     canvas.showPage()
 
     text(canvas, 32, height - 40, "消費日 入帳起息日 卡號末四碼 帳單說明 臺幣金額")
-    row(canvas, height - 70, ("01/01", "01/03", "1111", "虛構商店甲", "1,234"))
-    row(canvas, height - 92, ("01/02", "01/04", "1111", "FICTIONAL SHOP", "2,600 01/02 JPY12,000.00"))
-    row(canvas, height - 114, ("01/05", "01/07", "1111", "虛構商店退款", "-500"))
-    text(canvas, 32, height - 136, "01/06 01/08 AUTO PAYMENT FROM PRIOR STATEMENT")
-    row(canvas, height - 158, ("01/06", "01/08", "1111", "虛構回饋折抵", "-100"))
+    prefix = f"{month:02d}"
+    row(canvas, height - 70, (f"{prefix}/01", f"{prefix}/03", "1111", "虛構商店甲", "1,234"))
+    row(canvas, height - 92, (f"{prefix}/02", f"{prefix}/04", "1111", "FICTIONAL SHOP", f"2,600 {prefix}/02 JPY12,000.00"))
+    row(canvas, height - 114, (f"{prefix}/05", f"{prefix}/07", "1111", "虛構商店退款", "-500"))
+    text(canvas, 32, height - 136, f"{prefix}/06 {prefix}/08 AUTO PAYMENT FROM PRIOR STATEMENT")
+    row(canvas, height - 158, (f"{prefix}/06", f"{prefix}/08", "1111", "虛構回饋折抵", "-100"))
     canvas.showPage()
 
     text(canvas, 32, height - 40, "消費日 入帳起息日 卡號末四碼 帳單說明 臺幣金額")
     text(canvas, 205, height - 64, "FICTIONAL MULTI-", 7)
     text(canvas, 205, height - 76, "LINE DESCRIPTION", 7)
-    row(canvas, height - 70, ("01/07", "01/09", "1111", "", "789"))
+    row(canvas, height - 70, (f"{prefix}/07", f"{prefix}/09", "1111", "", "789"))
     text(canvas, 205, height - 91, "AMBIGUOUS PART A", 7)
     text(canvas, 205, height - 94, "AMBIGUOUS PART B", 7)
     text(canvas, 205, height - 106, "AMBIGUOUS PART C", 7)
-    row(canvas, height - 100, ("01/08", "01/10", "1111", "", "50"))
+    row(canvas, height - 100, (f"{prefix}/08", f"{prefix}/10", "1111", "", "50"))
     text(canvas, 205, height - 135, "您的正卡，本期應繳金額合計 4,073")
     canvas.save()
     return output.getvalue()
@@ -82,6 +84,12 @@ def scanned() -> bytes:
     image_path.unlink()
     return output.getvalue()
 
+
+if "--acceptance-only" in sys.argv:
+    (ROOT / "statement-acceptance-encrypted.pdf").write_bytes(
+        encrypt(statement(2026, 7))
+    )
+    raise SystemExit(0)
 
 plain = statement()
 (ROOT / "statement-plain.pdf").write_bytes(plain)

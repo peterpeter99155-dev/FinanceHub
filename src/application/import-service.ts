@@ -17,7 +17,9 @@ import {
   type ImportTransactionKind,
   type ParsedImportBatch,
   type SourceObservation,
+  calculateReviewedStatementDetailTotal,
   calculateStatementDetailTotal,
+  hasImportDuplicateSignal,
 } from '../domain/import';
 import { createTwdAmount } from '../domain/money';
 import {
@@ -42,6 +44,9 @@ export interface ImportBatchSnapshot {
   readonly observations: readonly SourceObservation[];
   readonly candidates: readonly ImportCandidate[];
   readonly insights: readonly ImportCandidateInsight[];
+  readonly reviewedDetailTotal: number;
+  readonly reconciliationDifference: number;
+  readonly isReconciled: boolean;
   readonly wasAlreadyImported?: boolean;
 }
 
@@ -148,12 +153,30 @@ export class ImportService {
     const batch = this.imports.findBatchById(id);
     if (!batch) throw new Error(`Import batch "${id}" was not found.`);
     const observations = this.imports.listObservations(id);
-    const candidates = this.imports.listCandidates(id);
+    const candidates = sortImportCandidates(
+      this.imports.listCandidates(id),
+      observations,
+    );
     const transactions = this.transactions.listAll();
+    const reviewedDetailTotal = calculateReviewedStatementDetailTotal(
+      candidates.map((candidate) => ({
+        kind: candidate.kind,
+        amount: candidate.amount,
+        originalStatementEffect: observations.find(
+          ({ id }) => id === candidate.observationId,
+        )!.statementEffect,
+      })),
+    );
+    const reconciliationDifference = Math.abs(
+      reviewedDetailTotal - batch.statementDetailTotal,
+    );
     return {
       batch,
       observations,
       candidates,
+      reviewedDetailTotal,
+      reconciliationDifference,
+      isReconciled: reconciliationDifference === 0,
       insights: candidates.map((candidate) =>
         this.buildInsight(
           candidate,
@@ -268,6 +291,26 @@ export class ImportService {
             'Import candidate belongs to another batch.',
           );
         }
+        const observation = this.imports
+          .listObservations(batchId)
+          .find(({ id }) => id === candidate.observationId)!;
+        const insight = this.buildInsight(
+          candidate,
+          observation,
+          this.transactions.listAll(),
+        );
+        if (
+          hasImportDuplicateSignal(
+            insight.duplicateObservationCount,
+            insight.matches.length,
+          ) &&
+          decision.duplicateDecisionConfirmed !== true
+        ) {
+          throw new FinanceHubError(
+            ERROR_CODES.importCandidateUnavailable,
+            'A possible duplicate requires an explicit user decision.',
+          );
+        }
         this.applyDecision(candidate, decision, now);
       }
     });
@@ -290,6 +333,30 @@ export class ImportService {
       }
     });
     return this.getBatch(batch.id);
+  }
+
+  removeBatch(batchId: string): void {
+    this.imports.runInTransaction(() => {
+      const batch = this.imports.findBatchById(batchId);
+      if (!batch) {
+        throw new FinanceHubError(
+          ERROR_CODES.importCandidateUnavailable,
+          'Import batch is unavailable.',
+        );
+      }
+      const hasFormalTransaction = this.imports
+        .listCandidates(batchId)
+        .some(({ decision }) =>
+          decision === 'create_new' || decision === 'link_existing',
+        );
+      if (hasFormalTransaction) {
+        throw new FinanceHubError(
+          ERROR_CODES.importBatchInUse,
+          'Import batch has formal transaction links.',
+        );
+      }
+      this.imports.deleteBatch(batchId);
+    });
   }
 
   private applyDecision(
@@ -416,9 +483,9 @@ export class ImportService {
   }
 
   private requireReconciledBatch(id: string): ImportBatch {
-    const batch = this.imports.findBatchById(id);
-    if (!batch) throw new Error(`Import batch "${id}" was not found.`);
-    if (batch.statementDetailTotal !== batch.parsedDetailTotal) {
+    const snapshot = this.getBatch(id);
+    const batch = snapshot.batch;
+    if (batch.statementDetailTotal !== snapshot.reviewedDetailTotal) {
       throw new FinanceHubError(
         ERROR_CODES.importReconciliationMismatch,
         'Statement detail total does not match parsed observations.',
@@ -527,6 +594,32 @@ export class ImportService {
       );
     }
   }
+}
+
+function sortImportCandidates(
+  candidates: readonly ImportCandidate[],
+  observations: readonly SourceObservation[],
+): readonly ImportCandidate[] {
+  const sourceById = new Map(
+    observations.map((observation) => [observation.id, observation]),
+  );
+  return [...candidates].sort((left, right) => {
+    const byDate = left.occurredAt.localeCompare(right.occurredAt);
+    if (byDate !== 0) return byDate;
+    const leftSource = sourceById.get(left.observationId);
+    const rightSource = sourceById.get(right.observationId);
+    const byPage = (leftSource?.pageNumber ?? 0) - (rightSource?.pageNumber ?? 0);
+    if (byPage !== 0) return byPage;
+    const leftY = rowY(leftSource?.anonymousRowLocator);
+    const rightY = rowY(rightSource?.anonymousRowLocator);
+    if (leftY !== rightY) return rightY - leftY;
+    return left.id.localeCompare(right.id);
+  });
+}
+
+function rowY(locator: string | undefined): number {
+  const match = locator?.match(/-y-(-?\d+(?:\.\d+)?)$/);
+  return match ? Number(match[1]) : 0;
 }
 
 function assertUniqueCandidateDecisions(

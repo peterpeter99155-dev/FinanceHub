@@ -34,4 +34,5 @@ export interface ImportsApi {
     decisions: readonly CandidateDecision[],
   ): Promise<ImportBatchSnapshot>;
   excludeBatch(batchId: string): Promise<ImportBatchSnapshot>;
+  removeBatch(batchId: string): Promise<void>;
 }

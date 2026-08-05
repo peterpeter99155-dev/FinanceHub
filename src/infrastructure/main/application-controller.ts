@@ -425,6 +425,10 @@ function registerFinancialHandlers(
     if (typeof batchId !== 'string') throw invalidImportInput();
     return writeGate.runWrite(() => services.imports.excludeBatch(batchId));
   });
+  registry.handle(IPC_CHANNELS.removeImportBatch, (batchId: unknown) => {
+    if (typeof batchId !== 'string') throw invalidImportInput();
+    return writeGate.runWrite(() => services.imports.removeBatch(batchId));
+  });
 }
 
 function invalidImportInput(): FinanceHubError {

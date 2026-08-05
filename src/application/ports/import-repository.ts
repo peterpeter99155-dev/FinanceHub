@@ -29,4 +29,5 @@ export interface ImportRepository {
   updateCandidate(candidate: ImportCandidate): void;
   resolveCandidate(candidate: ImportCandidate): void;
   createSourceLink(link: TransactionSourceLink): void;
+  deleteBatch(id: string): void;
 }

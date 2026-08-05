@@ -8,7 +8,11 @@ import type { FinancialItemCustomType } from '../../src/domain/financial-item-cu
 import { createTwdAmount } from '../../src/domain/money';
 import type { FinancialTransaction } from '../../src/domain/transaction';
 import type { ImportBatchSnapshot } from '../../src/application/import-service';
-import type { ImportCandidate, SourceObservation } from '../../src/domain/import';
+import {
+  calculateReviewedStatementDetailTotal,
+  type ImportCandidate,
+  type SourceObservation,
+} from '../../src/domain/import';
 import {
   applyBalanceEffect,
   calculateAccountBalanceEffects,
@@ -96,27 +100,46 @@ function createApi(
   const importScenario = new URLSearchParams(window.location.search).get('import');
   if (importScenario !== null) state.items.push(creditCardItem());
   let importSnapshot = createImportSnapshot();
-  if (importScenario === 'link') state.transactions.push(existingCardTransaction());
+  let importRemoved = false;
+  if (importScenario === 'link') {
+    const transaction = existingCardTransaction();
+    state.transactions.push(transaction);
+    importSnapshot = withFirstDuplicateInsight(importSnapshot, transaction);
+  }
   if (importScenario === 'suggestions') {
     const transaction = existingCardTransaction();
     state.transactions.push(transaction);
+    importSnapshot = withFirstDuplicateInsight(importSnapshot, transaction, true);
+  }
+  if (importScenario === 'partial-duplicate') {
+    const transaction = existingCardTransaction();
+    state.transactions.push(transaction);
+    importSnapshot = withFirstDuplicateInsight({
+      ...importSnapshot,
+      candidates: importSnapshot.candidates.map((candidate, index) =>
+        index === 1 ? { ...candidate, kind: 'credit_card_refund' } : candidate,
+      ),
+    }, transaction);
+  }
+  if (importScenario === 'observation-only-duplicate') {
     importSnapshot = {
       ...importSnapshot,
       insights: importSnapshot.insights.map((insight, index) =>
         index === 0
-          ? {
-              ...insight,
-              duplicateObservationCount: 1,
-              matches: [
-                { transaction, reason: 'matching_transaction_fields' },
-              ],
-              categorySuggestion: {
-                categoryId: 'expense-food',
-                evidenceCount: 2,
-              },
-            }
+          ? { ...insight, duplicateObservationCount: 1 }
           : insight,
       ),
+    };
+  }
+  if (importScenario === 'empty-candidates') {
+    importSnapshot = { ...importSnapshot, candidates: [], insights: [] };
+  }
+  if (importScenario === 'reconciliation-mismatch') {
+    importSnapshot = {
+      ...importSnapshot,
+      batch: { ...importSnapshot.batch, statementDetailTotal: 1_000 },
+      reconciliationDifference: 100,
+      isReconciled: false,
     };
   }
   let backupStatus: BackupStatus = {
@@ -314,27 +337,82 @@ function createApi(
     imports: {
       selectStatementFile: async () => ({ status: 'selected', selectionToken: 'selection-1', displayName: '虛構信用卡帳單.pdf' }),
       parseSelectedStatement: async () => {
+        if (importScenario === 'parse-loading') {
+          await new Promise<void>((resolve) => {
+            window.addEventListener(
+              'financehub-test-import-parse-ready',
+              () => resolve(),
+              { once: true },
+            );
+          });
+        }
         if (importScenario === 'failure') throw { code: 'PDF_PARSE_INCOMPLETE' };
+        if (importRemoved) {
+          importSnapshot = createImportSnapshot();
+          importRemoved = false;
+        }
         return importScenario === 'duplicate'
           ? { ...importSnapshot, wasAlreadyImported: true }
           : importSnapshot;
       },
-      getBatch: async () => importSnapshot,
-      listBatches: async () => [{
+      getBatch: async () => {
+        if (importScenario === 'history-open-error') {
+          throw { code: 'IMPORT_CANDIDATE_UNAVAILABLE' };
+        }
+        return importSnapshot;
+      },
+      listBatches: async () => {
+        if (importScenario === 'history-error') {
+          throw { code: 'IMPORT_CANDIDATE_UNAVAILABLE' };
+        }
+        if (importScenario === 'history-empty' || importRemoved) return [];
+        if (importScenario === 'history-loading') {
+          await new Promise<void>((resolve) => {
+            window.addEventListener(
+              'financehub-test-import-history-ready',
+              () => resolve(),
+              { once: true },
+            );
+          });
+        }
+        return [{
         batch: importSnapshot.batch,
         candidateCount: importSnapshot.candidates.length,
         pendingCount: importSnapshot.candidates.filter(
           ({ decision }) => !decision,
         ).length,
-      }],
+        }];
+      },
       updateCandidate: async (id, update) => {
         const current = importSnapshot.candidates.find((item) => item.id === id);
         if (!current) throw { code: 'IMPORT_CANDIDATE_UNAVAILABLE' };
         const updated = { ...current, ...update, updatedAt: NOW };
-        importSnapshot = { ...importSnapshot, candidates: importSnapshot.candidates.map((item) => item.id === id ? updated : item) };
+        const candidates = importSnapshot.candidates.map((item) => item.id === id ? updated : item);
+        const reviewedDetailTotal = calculateReviewedStatementDetailTotal(
+          candidates.map((candidate) => ({
+            kind: candidate.kind,
+            amount: candidate.amount,
+            originalStatementEffect: importSnapshot.observations.find(
+              ({ id: observationId }) => observationId === candidate.observationId,
+            )!.statementEffect,
+          })),
+        );
+        const reconciliationDifference = Math.abs(
+          reviewedDetailTotal - importSnapshot.batch.statementDetailTotal,
+        );
+        importSnapshot = {
+          ...importSnapshot,
+          candidates,
+          reviewedDetailTotal,
+          reconciliationDifference,
+          isReconciled: reconciliationDifference === 0,
+        };
         return updated;
       },
       confirmCandidates: async (_batchId, decisions) => {
+        if (importScenario === 'reconciliation-mismatch') {
+          throw { code: 'IMPORT_RECONCILIATION_MISMATCH' };
+        }
         if (importScenario === 'confirm-failure') throw { code: 'IMPORT_CANDIDATE_UNAVAILABLE' };
         for (const decision of decisions) {
           if (decision.decision !== 'create_new') continue;
@@ -363,6 +441,9 @@ function createApi(
         return importSnapshot;
       },
       excludeBatch: async () => importSnapshot,
+      removeBatch: async () => {
+        importRemoved = true;
+      },
     },
     transactions: {
       listMonth: async (year, month, offset = 0) =>
@@ -398,6 +479,28 @@ function createApi(
         return transactionSnapshot(state, year, month);
       },
     },
+  };
+}
+
+function withFirstDuplicateInsight(
+  snapshot: ImportBatchSnapshot,
+  transaction: FinancialTransaction,
+  includeCategorySuggestion = false,
+): ImportBatchSnapshot {
+  return {
+    ...snapshot,
+    insights: snapshot.insights.map((insight, index) =>
+      index === 0
+        ? {
+            ...insight,
+            duplicateObservationCount: 1,
+            matches: [{ transaction, reason: 'matching_transaction_fields' }],
+            categorySuggestion: includeCategorySuggestion
+              ? { categoryId: 'expense-food', evidenceCount: 2 }
+              : undefined,
+          }
+        : insight,
+    ),
   };
 }
 
@@ -608,7 +711,7 @@ function createImportSnapshot(): ImportBatchSnapshot {
     { id: 'observation-2', batchId: 'batch-1', observationFingerprint: 'b'.repeat(64), amount: 100, statementEffect: -100, occurredAt: '2026-07-12T04:00:00.000Z', occurredAtPrecision: 'date', summary: '虛構扣抵', pageNumber: 2, anonymousRowLocator: 'page-2-row-2', warningCodes: [IMPORT_WARNING_CODES.negativeItemRequiresUserConfirmation] },
   ];
   const candidates: ImportCandidate[] = observations.map((item, index) => ({ id: `candidate-${index + 1}`, batchId: 'batch-1', observationId: item.id, kind: item.kind, amount: item.amount, occurredAt: item.occurredAt, occurredAtPrecision: item.occurredAtPrecision, name: item.summary, creditCardAccountId: 'card-1', updatedAt: NOW }));
-  return { batch: { id: 'batch-1', sourceType: 'sinopac-credit-card-statement-pdf', sourceFileDigest: 'c'.repeat(64), statementMonth: '2026-07', creditCardAccountId: 'card-1', importedAt: NOW, parserName: 'sinopac-credit-card-statement', parserVersion: '1', statementDetailTotal: 1100, parsedDetailTotal: 1100 }, observations, candidates, insights: candidates.map(({ id }) => ({ candidateId: id, duplicateObservationCount: 0, matches: [] })) };
+  return { batch: { id: 'batch-1', sourceType: 'sinopac-credit-card-statement-pdf', sourceFileDigest: 'c'.repeat(64), statementMonth: '2026-07', creditCardAccountId: 'card-1', importedAt: NOW, parserName: 'sinopac-credit-card-statement', parserVersion: '1', statementDetailTotal: 1100, parsedDetailTotal: 1100 }, observations, candidates, reviewedDetailTotal: 1100, reconciliationDifference: 0, isReconciled: true, insights: candidates.map(({ id }) => ({ candidateId: id, duplicateObservationCount: 0, matches: [] })) };
 }
 
 function existingCardTransaction(): FinancialTransaction {

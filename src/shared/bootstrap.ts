@@ -41,6 +41,7 @@ export const IPC_CHANNELS = {
   updateImportCandidate: 'imports:update-candidate',
   confirmImportCandidates: 'imports:confirm-candidates',
   excludeImportBatch: 'imports:exclude-batch',
+  removeImportBatch: 'imports:remove-batch',
 } as const;
 
 export interface BootstrapStatus {

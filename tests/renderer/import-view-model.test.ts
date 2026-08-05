@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { IMPORT_WARNING_LABELS } from '../../src/renderer/importViewModel';
+import {
+  IMPORT_WARNING_LABELS,
+  importAmountInputPatch,
+  importCandidateReviewState,
+  persistedImportAmount,
+} from '../../src/renderer/importViewModel';
 import { IMPORT_WARNING_CODES } from '../../src/shared/import-warning-codes';
 
 describe('import warning labels', () => {
@@ -30,5 +35,37 @@ describe('import warning labels', () => {
     expect(IMPORT_WARNING_LABELS).not.toHaveProperty(
       'SPLIT_SUMMARY_REVIEW_REQUIRED',
     );
+  });
+});
+
+describe('import amount input', () => {
+  it('treats an entered negative amount as an explicit refund shortcut', () => {
+    expect(importAmountInputPatch('-1,200')).toEqual({
+      amount: '-1200',
+      kind: 'credit_card_refund',
+    });
+    expect(persistedImportAmount('-1200')).toBe(1200);
+  });
+
+  it('does not change the transaction kind for a positive amount', () => {
+    expect(importAmountInputPatch('1200')).toEqual({ amount: '1200' });
+  });
+});
+
+describe('import candidate review state', () => {
+  it('marks an unknown negative item reviewed after the user chooses its kind', () => {
+    const warningCodes = [
+      IMPORT_WARNING_CODES.negativeItemRequiresUserConfirmation,
+    ];
+    expect(importCandidateReviewState(
+      { amount: 45 },
+      warningCodes,
+      { kind: '', amount: '45' },
+    )).toBe('needs_review');
+    expect(importCandidateReviewState(
+      { amount: 45 },
+      warningCodes,
+      { kind: 'credit_card_purchase', amount: '45' },
+    )).toBe('reviewed');
   });
 });

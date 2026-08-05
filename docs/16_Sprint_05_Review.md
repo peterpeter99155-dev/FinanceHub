@@ -1,7 +1,7 @@
 # Sprint 05 Review：交易匯入與待確認流程
 
-版本：v1.0  
-日期：2026-08-04  
+版本：v1.1
+日期：2026-08-05
 分支：`codex/sprint-05`
 
 ## 1. 結論
@@ -79,12 +79,13 @@ IPC 僅回傳穩定錯誤代碼及安全文案，不回傳原始 filesystem/PDF 
 typecheck: passed
 lint: passed
 verify: Architecture verification passed; guards 18/18 passed
-unit/integration: 36 files passed, 235 tests passed
-browser e2e: 20 passed
+unit/integration: 37 files passed, 238 tests passed
+browser e2e: 24 passed
 package smoke: passed
 production test-password matches: 0
 production known test-derived-key matches: 0
-Electron same package: 10/10 passed
+Electron same package（階段 6 HEAD）: 10/10 passed
+Electron latest S5-70 HEAD: 2 passed（財務流程與 production bundle 匯入各 1）
 make: passed
 clean install: install root removed, latest Setup installed, executable exists
 installed Sprint 04 regression acceptance: passed
@@ -148,3 +149,53 @@ Electron 10 次使用相同的 `app.asar`，前後 SHA-256 均為：
 一個來源主要需要：來源專屬 parser、匿名 fixture、來源欄位正規化、
 安全錯誤映射與 adapter 測試。Email 來源另需先拍板授權、請款、沖正及
 時間精確度語意；在該決策完成前不得將通知自動合併為正式交易。
+
+## 10. S5-70 匯入待確認畫面體驗調整
+
+- 匯入來源、批次摘要、候選清單與匯入紀錄改用一致的標題、輔助文字、
+  間距及既有主要／次要按鈕樣式。
+- 候選預設以日期、金額、摘要、分類及信用卡的精簡列顯示；只有使用者
+  點擊「查看與修改」才顯示完整欄位，FR-071 的修正能力保持不變。
+- 無疑似重複訊號的候選預設為 `create_new`，可以直接參與批次確認。
+- 疑似重複定義沿用既有 insight：`duplicateObservationCount > 0` 或
+  `matches.length > 0`。這類候選初始沒有決策，必須明確選擇建立、連結
+  或排除；renderer 與 application 都會阻擋未明確決定的呼叫。
+- 批次確認會跳過尚未決定的疑似重複項目，只把其餘可處理候選送入同一
+  application transaction。送入的候選仍維持全部成功或全部回滾；跳過
+  的候選留在原批次繼續待確認。
+- application 測試證明疑似重複未帶明確確認時不會建立正式交易；Browser
+  E2E 證明預設收合、展開可編輯，以及批次只處理正常項目並留下未決重複。
+- 「確認此筆」在尚未選擇疑似重複處理方式時仍可點擊，會顯示明確警告
+  且不建立交易，不再以無回饋的停用按鈕讓使用者誤認故障。
+- 金額欄允許以負號表達帳單減項；負號是明確的輸入快捷方式，會同步選擇
+  `credit_card_refund`。送往 application 的退款金額仍轉為正數，維持
+  DEC-038／BR-040 的正式資料語意。
+- 匯入來源、批次摘要與匯入紀錄採用與其他頁面相同的 26px panel 間距、
+  全域標題字級與按鈕樣式；解析按鈕保留固定最小寬度，進行時顯示
+  「解析中…」，避免文字切換造成按鈕跳動。
+- 匯入紀錄的 API 與狀態管理已移至 `useImportHistory`，呈現元件不再直接
+  呼叫 preload API。載入中、空白、載入失敗、查看失敗及查看進行中都有
+  明確狀態與安全中文訊息。
+- 候選與既有交易比較退款時會先把介面負號正規化為正式正數金額，避免
+  `-100` 與既有退款 `100` 被錯誤標示為金額不同。
+- 快速新增信用卡只說明「建立名稱後即可匯入」，不再要求使用者理解或
+  設定應繳狀態。
+- Browser E2E 新增解析中、匯入紀錄載入／空白／失敗、查看失敗、無候選
+  及無可連結交易；加入安全移除匯入紀錄後，完整 Browser E2E 為
+  27 項全綠。
+- 新增過去日期的加密虛構 fixture 與 Electron production bundle 測試。
+  測試由 packaged `app.asar` 啟動，只替代作業系統選檔回傳，其餘檔案
+  讀取、preload、IPC、PDF.js worker、application 與加密 SQLite 均走
+  production 路徑；正確密碼、錯誤密碼、同檔重複、損壞、掃描型與未知
+  版面均已實際通過。固定 PDF 測試密碼只存在測試與 fixture generator。
+- 帳單核對仍維持「不一致不得確認」，但會依使用者修正後的候選金額與
+  消費／退款方向重新加總；畫面同時顯示銀行合計、目前明細加總與差額，
+  不再使用解析當下固定值造成無法修正的死結。
+- 匯入紀錄新增安全移除流程。尚未建立或連結正式交易的待確認／已排除
+  批次可在二次確認後移除並重新匯入同一 PDF；若曾建立或連結正式交易，
+  application 層以穩定錯誤阻擋，且不刪除正式交易或來源關聯。
+- 待確認候選由 application 固定依日期由舊到新排列；同日再依帳單頁碼
+  與列位置維持來源順序，不再使用隨機 UUID 排序。
+- 需要使用者指定交易語意的項目在完成選擇後改顯示「已檢查」。若單筆
+  已檢查但整批總額仍不符，錯誤顯示於帳單核對區並列出差額，不再只在
+  長頁面頂端顯示通用錯誤；一般頁面提示則以 sticky 方式留在視窗上方。

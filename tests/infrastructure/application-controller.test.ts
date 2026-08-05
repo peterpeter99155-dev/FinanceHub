@@ -76,6 +76,7 @@ describe('ApplicationController unlock boundary', () => {
     expect(registry.has(IPC_CHANNELS.updateImportCandidate)).toBe(true);
     expect(registry.has(IPC_CHANNELS.confirmImportCandidates)).toBe(true);
     expect(registry.has(IPC_CHANNELS.excludeImportBatch)).toBe(true);
+    expect(registry.has(IPC_CHANNELS.removeImportBatch)).toBe(true);
     await expect(
       registry.invoke(IPC_CHANNELS.openBackupDirectory),
     ).resolves.toBeUndefined();
@@ -224,6 +225,7 @@ function fakeServices() {
       updateCandidate: () => undefined,
       confirmCandidates: () => undefined,
       excludeBatch: () => undefined,
+      removeBatch: () => undefined,
     },
   };
 }

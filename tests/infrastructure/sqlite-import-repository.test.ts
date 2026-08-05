@@ -138,6 +138,20 @@ describe('SqliteImportRepository', () => {
     `).get(candidateId)).toEqual({ decision: null });
   });
 
+  it('deletes an import batch and its pending graph as one cascade', async () => {
+    const service = createService(imports);
+    const snapshot = await service.createBatch({
+      content: new Uint8Array([1]),
+      creditCardAccountId: 'card-1',
+    });
+
+    service.removeBatch(snapshot.batch.id);
+
+    expect(imports.findBatchById(snapshot.batch.id)).toBeUndefined();
+    expect(imports.listCandidates(snapshot.batch.id)).toEqual([]);
+    expect(imports.listObservations(snapshot.batch.id)).toEqual([]);
+  });
+
   it('rolls back balances, transactions, links and decisions after a persistence failure', async () => {
     let links = 0;
     const failingImports: ImportRepository = {
@@ -157,6 +171,7 @@ describe('SqliteImportRepository', () => {
       findCandidateById: imports.findCandidateById.bind(imports),
       updateCandidate: imports.updateCandidate.bind(imports),
       resolveCandidate: imports.resolveCandidate.bind(imports),
+      deleteBatch: imports.deleteBatch.bind(imports),
       createSourceLink: (link) => {
         links += 1;
         if (links === 2) throw new Error('simulated SQLite link failure');

@@ -13,6 +13,7 @@ export const ERROR_CODES = {
   importDuplicateSource: 'IMPORT_DUPLICATE_SOURCE',
   importReconciliationMismatch: 'IMPORT_RECONCILIATION_MISMATCH',
   importCandidateUnavailable: 'IMPORT_CANDIDATE_UNAVAILABLE',
+  importBatchInUse: 'IMPORT_BATCH_IN_USE',
   importSelectionUnavailable: 'IMPORT_SELECTION_UNAVAILABLE',
   pdfFileTooLarge: 'PDF_FILE_TOO_LARGE',
   pdfPageLimitExceeded: 'PDF_PAGE_LIMIT_EXCEEDED',

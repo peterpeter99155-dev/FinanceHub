@@ -2,6 +2,8 @@ import { type FormEvent, useLayoutEffect, useRef, useState } from 'react';
 
 import type { FinancialItem } from '../../domain/financial-item';
 import { financialItemErrorMessage } from '../messages';
+import { IMPORT_LABELS } from '../labels';
+import { IMPORT_MESSAGES } from '../messages';
 
 interface Props {
   readonly onCreated: (name: string) => Promise<FinancialItem>;
@@ -27,7 +29,7 @@ export function QuickCreditCardDialog({ onCreated }: Props) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!name.trim()) {
-      setError('請輸入信用卡名稱。');
+      setError(IMPORT_MESSAGES.creditCardNameRequired);
       return;
     }
     setIsSaving(true);
@@ -44,8 +46,8 @@ export function QuickCreditCardDialog({ onCreated }: Props) {
 
   return (
     <>
-      <button type="button" onClick={() => setIsOpen(true)}>
-        新增信用卡
+      <button className="secondary-button" type="button" onClick={() => setIsOpen(true)}>
+        {IMPORT_LABELS.quickCard}
       </button>
       {isOpen && (
         <div className="modal-backdrop" role="presentation">
@@ -56,15 +58,15 @@ export function QuickCreditCardDialog({ onCreated }: Props) {
             role="dialog"
             onSubmit={(event) => void submit(event)}
           >
-            <p className="label">帳單匯入</p>
-            <h2 id="quick-credit-card-title">新增信用卡</h2>
-            <p>先建立名稱即可開始匯入，應繳餘額會從 TWD 0 起算。</p>
+            <p className="label">{IMPORT_LABELS.pageTitle}</p>
+            <h2 id="quick-credit-card-title">{IMPORT_LABELS.quickCard}</h2>
+            <p>{IMPORT_LABELS.quickCardHelp}</p>
             <label>
-              信用卡名稱
+              {IMPORT_LABELS.quickCardName}
               <input
                 ref={nameInputRef}
                 maxLength={100}
-                placeholder="例如：日常消費卡"
+                placeholder={IMPORT_LABELS.quickCardNamePlaceholder}
                 value={name}
                 onChange={(event) => setName(event.target.value)}
               />
@@ -77,10 +79,10 @@ export function QuickCreditCardDialog({ onCreated }: Props) {
                 type="button"
                 onClick={close}
               >
-                取消
+                {IMPORT_LABELS.cancel}
               </button>
-              <button disabled={isSaving} type="submit">
-                {isSaving ? '建立中…' : '建立並選取'}
+              <button className="primary-button" disabled={isSaving} type="submit">
+                {isSaving ? IMPORT_LABELS.creating : IMPORT_LABELS.createAndSelect}
               </button>
             </div>
           </form>

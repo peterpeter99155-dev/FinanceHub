@@ -291,6 +291,13 @@ export class SqliteImportRepository implements ImportRepository {
       .run(link.observationId, link.transactionId, link.linkedAt);
   }
 
+  deleteBatch(id: string): void {
+    const result = this.database
+      .prepare('DELETE FROM import_batches WHERE id = ?')
+      .run(id);
+    assertChanged(result.changes, id);
+  }
+
   private findBatch(
     field: 'id' | 'source_file_digest',
     value: string,

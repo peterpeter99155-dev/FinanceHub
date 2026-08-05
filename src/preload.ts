@@ -239,6 +239,11 @@ const financeHubApi: FinanceHubApi = Object.freeze({
         IPC_CHANNELS.excludeImportBatch,
         batchId,
       ),
+    removeBatch: (batchId: string) =>
+      invoke<Awaited<ReturnType<ImportsApi['removeBatch']>>>(
+        IPC_CHANNELS.removeImportBatch,
+        batchId,
+      ),
   }),
 });
 

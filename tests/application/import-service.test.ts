@@ -119,6 +119,20 @@ class MemoryImportRepository implements ImportRepository {
     }
     this.links.set(link.observationId, link);
   }
+
+  deleteBatch(id: string): void {
+    const observationIds = [...this.observations.values()]
+      .filter(({ batchId }) => batchId === id)
+      .map(({ id: observationId }) => observationId);
+    this.batches.delete(id);
+    for (const [candidateId, candidate] of this.candidates) {
+      if (candidate.batchId === id) this.candidates.delete(candidateId);
+    }
+    for (const observationId of observationIds) {
+      this.observations.delete(observationId);
+      this.links.delete(observationId);
+    }
+  }
 }
 
 function parsedBatch(
@@ -276,6 +290,29 @@ describe('ImportService', () => {
     expect(finance.items.get('card-1')?.amount).toBe(0);
   });
 
+  it('orders candidates by date and keeps statement order within a date', async () => {
+    const base = parsedBatch();
+    const observations = [
+      { ...base.observations[0], occurredAt: '2026-07-12T04:00:00.000Z', pageNumber: 2, anonymousRowLocator: 'page-2-y-300' },
+      { ...base.observations[1], occurredAt: '2026-07-10T04:00:00.000Z', pageNumber: 2, anonymousRowLocator: 'page-2-y-200' },
+      { ...base.observations[0], observationFingerprint: 'c'.repeat(64), occurredAt: '2026-07-10T04:00:00.000Z', pageNumber: 2, anonymousRowLocator: 'page-2-y-400' },
+    ];
+    const { service } = setup(parsedBatch({
+      observations,
+      statementDetailTotal: 170,
+    }));
+
+    const created = await service.createBatch({
+      content: new Uint8Array([1]),
+      creditCardAccountId: 'card-1',
+    });
+
+    expect(created.candidates.map(({ observationId }) =>
+      created.observations.find(({ id }) => id === observationId)!
+        .anonymousRowLocator,
+    )).toEqual(['page-2-y-400', 'page-2-y-200', 'page-2-y-300']);
+  });
+
   it('reopens an identical source without creating another batch', async () => {
     const { imports, service } = setup();
     const request = {
@@ -329,6 +366,21 @@ describe('ImportService', () => {
     });
     expect(result.candidates[0].decision).toBeUndefined();
     expect(finance.transactions.size).toBe(1);
+
+    expect(() => service.confirmCandidates(result.batch.id, [{
+      candidateId: result.candidates[0].id,
+      decision: 'create_new',
+    }])).toThrow('A possible duplicate requires an explicit user decision.');
+    expect(result.candidates[0].decision).toBeUndefined();
+    expect(finance.transactions.size).toBe(1);
+
+    const confirmed = service.confirmCandidates(result.batch.id, [{
+      candidateId: result.candidates[0].id,
+      decision: 'create_new',
+      duplicateDecisionConfirmed: true,
+    }]);
+    expect(confirmed.candidates[0].decision).toBe('create_new');
+    expect(finance.transactions.size).toBe(2);
   });
 
   it('suggests one category from confirmed history without writing it to the candidate', async () => {
@@ -361,6 +413,7 @@ describe('ImportService', () => {
       observationFingerprint: '3'.repeat(64),
       amount: 20,
       statementEffect: 20,
+      occurredAt: '2026-07-12T04:00:00.000Z',
       summary: '排除項目',
       anonymousRowLocator: 'page-2-row-3',
     };
@@ -475,6 +528,37 @@ describe('ImportService', () => {
     expect(finance.transactions.size).toBe(0);
   });
 
+  it('reconciles against user-corrected candidate amounts before confirmation', async () => {
+    const { finance, service } = setup(
+      parsedBatch({ statementDetailTotal: 80 }),
+    );
+    const created = await service.createBatch({
+      content: new Uint8Array([1]),
+      creditCardAccountId: 'card-1',
+    });
+    const purchase = created.candidates[0];
+
+    service.updateCandidate(purchase.id, {
+      kind: 'credit_card_purchase',
+      amount: 110,
+      occurredAt: purchase.occurredAt,
+      occurredAtPrecision: purchase.occurredAtPrecision,
+      name: purchase.name,
+      creditCardAccountId: purchase.creditCardAccountId,
+      categoryId: 'expense-uncategorized',
+    });
+
+    const reviewed = service.getBatch(created.batch.id);
+    expect(reviewed.batch.parsedDetailTotal).toBe(70);
+    expect(reviewed.reviewedDetailTotal).toBe(80);
+
+    service.confirmCandidates(created.batch.id, [{
+      candidateId: purchase.id,
+      decision: 'create_new',
+    }]);
+    expect(finance.transactions.size).toBe(1);
+  });
+
   it('allows a mismatched batch to be excluded without creating finance data', async () => {
     const { finance, service } = setup(
       parsedBatch({ statementDetailTotal: 999 }),
@@ -491,6 +575,54 @@ describe('ImportService', () => {
       'exclude',
     ]);
     expect(finance.transactions.size).toBe(0);
+  });
+
+  it('removes a pending import so the same source can be imported again', async () => {
+    const { imports, service } = setup();
+    const request = {
+      content: new Uint8Array([1]),
+      creditCardAccountId: 'card-1',
+    };
+    const created = await service.createBatch(request);
+
+    service.removeBatch(created.batch.id);
+
+    expect(imports.batches.size).toBe(0);
+    expect(imports.candidates.size).toBe(0);
+    expect(imports.observations.size).toBe(0);
+    const importedAgain = await service.createBatch(request);
+    expect(importedAgain.wasAlreadyImported).not.toBe(true);
+    expect(imports.batches.size).toBe(1);
+  });
+
+  it('allows an excluded import to be removed', async () => {
+    const { imports, service } = setup();
+    const created = await service.createBatch({
+      content: new Uint8Array([1]),
+      creditCardAccountId: 'card-1',
+    });
+    service.excludeBatch(created.batch.id);
+
+    service.removeBatch(created.batch.id);
+
+    expect(imports.batches.size).toBe(0);
+  });
+
+  it('does not remove an import that created a formal transaction', async () => {
+    const { finance, imports, service } = setup();
+    const created = await service.createBatch({
+      content: new Uint8Array([1]),
+      creditCardAccountId: 'card-1',
+    });
+    service.confirmCandidates(created.batch.id, [{
+      candidateId: created.candidates[0].id,
+      decision: 'create_new',
+    }]);
+
+    expect(() => service.removeBatch(created.batch.id))
+      .toThrow('formal transaction links');
+    expect(imports.batches.size).toBe(1);
+    expect(finance.transactions.size).toBe(1);
   });
 });
 

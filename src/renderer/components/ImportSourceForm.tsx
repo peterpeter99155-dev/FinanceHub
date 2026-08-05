@@ -2,6 +2,7 @@ import { PasswordInput } from './PasswordInput';
 import type { FinancialItem } from '../../domain/financial-item';
 import type { ImportFileSelection } from '../../shared/imports';
 import { QuickCreditCardDialog } from './QuickCreditCardDialog';
+import { IMPORT_LABELS } from '../labels';
 
 interface Props {
   readonly cards: readonly FinancialItem[];
@@ -20,23 +21,23 @@ export function ImportSourceForm(props: Props) {
   const selected = props.selection?.status === 'selected' ? props.selection : null;
   return (
     <section className="panel import-source-panel">
-      <div className="section-heading"><div><p className="label">本機帳單</p><h2>匯入信用卡月結帳單</h2><small>目前支援：永豐信用卡文字型 PDF</small></div></div>
+      <div className="section-heading"><div><p className="label">{IMPORT_LABELS.sourceEyebrow}</p><h2>{IMPORT_LABELS.sourceTitle}</h2><small>{IMPORT_LABELS.supportedSource}</small></div></div>
       {props.cards.length === 0 ? (
-        <div className="empty-state"><p>請先新增要對應的信用卡。</p><QuickCreditCardDialog onCreated={props.onCreateCard} /></div>
+        <div className="empty-state"><p>{IMPORT_LABELS.noCreditCard}</p><QuickCreditCardDialog onCreated={props.onCreateCard} /></div>
       ) : (
         <div className="import-source-fields">
           <label>信用卡<select data-testid="import-card" value={props.cardId} onChange={(event) => props.onCardId(event.target.value)}>
-            <option value="">請選擇信用卡</option>
+            <option value="">{IMPORT_LABELS.chooseCreditCard}</option>
             {props.cards.map((card) => <option key={card.id} value={card.id}>{card.name}</option>)}
           </select></label>
-          <PasswordInput autoComplete="off" dataTestId="pdf-password" label="PDF 密碼" maxLength={128} placeholder="只用於這次開啟帳單" restrictToNewPasswordCharacters={false} value={props.password} onChange={props.onPassword} onCompositionEnd={() => undefined} onCompositionStart={() => undefined} />
+          <PasswordInput autoComplete="off" dataTestId="pdf-password" label={IMPORT_LABELS.pdfPassword} maxLength={128} placeholder={IMPORT_LABELS.pdfPasswordPlaceholder} restrictToNewPasswordCharacters={false} value={props.password} onChange={props.onPassword} onCompositionEnd={() => undefined} onCompositionStart={() => undefined} />
           <div className="import-source-actions">
-            <button type="button" className="secondary-button" disabled={props.busy} onClick={props.onSelect}>選擇 PDF</button>
-            <span>{selected?.displayName ?? '尚未選擇檔案'}</span>
-            <button data-testid="parse-statement" type="button" disabled={props.busy || !selected || !props.cardId || !props.password} onClick={props.onParse}>開始解析</button>
+            <button type="button" className="secondary-button" disabled={props.busy} onClick={props.onSelect}>{IMPORT_LABELS.selectPdf}</button>
+            <span>{selected?.displayName ?? IMPORT_LABELS.noFileSelected}</span>
+            <button className="primary-button import-parse-button" data-testid="parse-statement" type="button" disabled={props.busy || !selected || !props.cardId || !props.password} onClick={props.onParse}>{props.busy ? IMPORT_LABELS.parsing : IMPORT_LABELS.parse}</button>
           </div>
           <div><QuickCreditCardDialog onCreated={props.onCreateCard} /></div>
-          <small>PDF 密碼不會保存、記錄或顯示在解析結果中；原始 PDF 也不會複製保存。</small>
+          <small>{IMPORT_LABELS.privacyNotice}</small>
         </div>
       )}
     </section>

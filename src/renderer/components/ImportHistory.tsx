@@ -1,45 +1,52 @@
-import { useEffect, useState } from 'react';
-
-import type {
-  ImportBatchHistoryItem,
-  ImportBatchSnapshot,
-} from '../../application/import-service';
 import type { FinancialItem } from '../../domain/financial-item';
+import type { ImportHistoryState } from '../useImportHistory';
+import {
+  IMPORT_LABELS,
+  importHistoryMonth,
+  importHistoryStatus,
+} from '../labels';
 
 interface Props {
   readonly accounts: readonly FinancialItem[];
-  readonly refreshKey?: string;
-  readonly onOpen: (snapshot: ImportBatchSnapshot) => Promise<void>;
+  readonly history: ImportHistoryState;
+  readonly onRemove: (id: string) => void;
 }
 
-export function ImportHistory({ accounts, refreshKey, onOpen }: Props) {
-  const [items, setItems] = useState<readonly ImportBatchHistoryItem[]>([]);
-
-  useEffect(() => {
-    void window.financeHub.imports.listBatches().then(setItems);
-  }, [refreshKey]);
-
-  if (items.length === 0) return null;
+export function ImportHistory({ accounts, history, onRemove }: Props) {
   return (
     <section className="panel import-history">
       <div className="section-heading">
-        <div><p className="label">已解析帳單</p><h2>匯入紀錄</h2></div>
+        <div><p className="label">{IMPORT_LABELS.historyEyebrow}</p><h2>{IMPORT_LABELS.historyTitle}</h2></div>
       </div>
+      {history.loading && <p className="state-panel" role="status">{IMPORT_LABELS.historyLoading}</p>}
+      {history.error && <div className="state-panel error" role="alert"><p>{history.error}</p><button className="secondary-button" type="button" onClick={history.reload}>{IMPORT_LABELS.historyRetry}</button></div>}
+      {!history.loading && !history.error && history.items.length === 0 && <p className="empty-state">{IMPORT_LABELS.historyEmpty}</p>}
       <div className="import-history-list">
-        {items.map(({ batch, candidateCount, pendingCount }) => (
+        {history.items.map(({ batch, candidateCount, pendingCount }) => (
           <article key={batch.id} className="import-history-item">
             <div>
-              <strong>{batch.statementMonth.replace('-', ' 年 ')} 月</strong>
+              <strong>{importHistoryMonth(batch.statementMonth)}</strong>
               <span>{accounts.find(({ id }) => id === batch.creditCardAccountId)?.name ?? '信用卡'}</span>
-              <small>{pendingCount > 0 ? `待確認 ${pendingCount} 筆` : `已處理 ${candidateCount} 筆`}</small>
+              <small>{importHistoryStatus(pendingCount, candidateCount)}</small>
             </div>
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={() => void window.financeHub.imports.getBatch(batch.id).then(onOpen)}
-            >
-              查看內容
-            </button>
+            <div className="import-history-actions">
+              <button
+                className="secondary-button"
+                disabled={history.openingId !== undefined}
+                type="button"
+                onClick={() => void history.open(batch.id)}
+              >
+                {history.openingId === batch.id ? IMPORT_LABELS.historyOpening : IMPORT_LABELS.historyOpen}
+              </button>
+              <button
+                className="delete-button"
+                disabled={history.openingId !== undefined}
+                type="button"
+                onClick={() => onRemove(batch.id)}
+              >
+                {IMPORT_LABELS.removeHistory}
+              </button>
+            </div>
           </article>
         ))}
       </div>
